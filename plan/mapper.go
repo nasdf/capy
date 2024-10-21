@@ -3,12 +3,18 @@ package plan
 import "github.com/ipld/go-ipld-prime/datamodel"
 
 // Mapper maps query node paths into result node paths.
+//
+// This happens because a graph traversal can return array indices
+// that are outside of the bounds of the result array.
 type Mapper struct {
+	counter map[string]int64
 	mapping map[string]datamodel.PathSegment
 }
 
+// NewMapper returns a new empty Mapper.
 func NewMapper() *Mapper {
 	return &Mapper{
+		counter: make(map[string]int64),
 		mapping: make(map[string]datamodel.PathSegment),
 	}
 }
@@ -16,16 +22,20 @@ func NewMapper() *Mapper {
 // Path returns a remapped path from the given path.
 func (r *Mapper) Path(p datamodel.Path) datamodel.Path {
 	segments := p.Segments()
-	if len(segments) < 2 {
-		return p
+	for i, s := range segments {
+		if _, err := s.Index(); err != nil {
+			continue
+		}
+		path := datamodel.NewPath(segments[:i])
+		remap, ok := r.mapping[path.String()]
+		if !ok {
+			// the first remap returns an append operation
+			remap = datamodel.PathSegmentOfString("-")
+			count := r.counter[path.String()]
+			r.counter[path.String()] = count + 1
+			r.mapping[path.String()] = datamodel.PathSegmentOfInt(count)
+		}
+		segments[i] = remap
 	}
-	index := segments[1].String()
-	remap, ok := r.mapping[index]
-	if !ok {
-		// the first remap returns an append operation
-		remap = datamodel.PathSegmentOfString("-")
-		r.mapping[index] = datamodel.PathSegmentOfInt(int64(len(r.mapping)))
-	}
-	segments[1] = remap
 	return datamodel.NewPath(segments)
 }

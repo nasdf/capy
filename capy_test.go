@@ -13,11 +13,13 @@ import (
 
 var testSchema = `type User {
 	Name: String
+	Stuff: [String]
 }`
 
 var testQuery = `mutation {
-	createUser(input: {Name: "Bob"}) {
+	createUser(input: {Name: "Bob", Stuff: ["one", "two"]}) {
 		Name
+		Stuff
 	}
 }`
 

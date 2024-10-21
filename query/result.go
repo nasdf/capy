@@ -69,7 +69,7 @@ func accumulateResultStruct(n string, ts *ipldschema.TypeSystem, t *ipldschema.T
 		structField := t.Field(selectField.Name)
 		fieldName := fmt.Sprintf("%s_%s", n, selectField.Name)
 		fieldType := accumulateResultType(fieldName, ts, structField.Type(), selectField)
-		fields[i] = ipldschema.SpawnStructField(structField.Name(), fieldType, false, structField.IsNullable())
+		fields[i] = ipldschema.SpawnStructField(structField.Name(), fieldType, true, structField.IsNullable())
 	}
 	ts.Accumulate(ipldschema.SpawnStruct(n, fields, ipldschema.SpawnStructRepresentationMap(nil)))
 	ts.Accumulate(ipldschema.SpawnList(fmt.Sprintf("[%s]", n), n, false))
