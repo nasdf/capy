@@ -94,7 +94,7 @@ func accumulateSchemaStructType(ts *schema.TypeSystem, s *ast.Schema, d *ast.Def
 		if field.Type.Elem != nil {
 			name = fmt.Sprintf("[%s]", name)
 		}
-		fields[i] = schema.SpawnStructField(field.Name, name, false, nonNull)
+		fields[i] = schema.SpawnStructField(field.Name, name, !nonNull, !nonNull)
 	}
 	ts.Accumulate(schema.SpawnStruct(d.Name, fields, schema.SpawnStructRepresentationMap(nil)))
 	ts.Accumulate(schema.SpawnList(fmt.Sprintf("[%s]", d.Name), d.Name, true))

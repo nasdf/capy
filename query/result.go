@@ -27,7 +27,7 @@ func spawnResultType(ts *ipldschema.TypeSystem, fields []graphql.CollectedField)
 		rootField := rootType.Field(s.Name)
 		fieldName := fmt.Sprintf("%s_%s", resultName, s.Name)
 		fieldType := accumulateResultType(fieldName, resultTypeSys, rootField.Type(), s.Field)
-		resultFields[i] = ipldschema.SpawnStructField(rootField.Name(), fieldType, false, rootField.IsNullable())
+		resultFields[i] = ipldschema.SpawnStructField(rootField.Name(), fieldType, false, false)
 	}
 	resultTypeSys.Accumulate(ipldschema.SpawnStruct(resultName, resultFields, ipldschema.SpawnStructRepresentationMap(nil)))
 
@@ -69,7 +69,7 @@ func accumulateResultStruct(n string, ts *ipldschema.TypeSystem, t *ipldschema.T
 		structField := t.Field(selectField.Name)
 		fieldName := fmt.Sprintf("%s_%s", n, selectField.Name)
 		fieldType := accumulateResultType(fieldName, ts, structField.Type(), selectField)
-		fields[i] = ipldschema.SpawnStructField(structField.Name(), fieldType, true, structField.IsNullable())
+		fields[i] = ipldschema.SpawnStructField(structField.Name(), fieldType, true, true)
 	}
 	ts.Accumulate(ipldschema.SpawnStruct(n, fields, ipldschema.SpawnStructRepresentationMap(nil)))
 	ts.Accumulate(ipldschema.SpawnList(fmt.Sprintf("[%s]", n), n, false))

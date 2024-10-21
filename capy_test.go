@@ -14,6 +14,7 @@ import (
 var testSchema = `type User {
 	Name: String
 	Stuff: [String]
+	Friend: User
 }`
 
 var testQuery = `mutation {

@@ -1,6 +1,8 @@
 package plan
 
-import "github.com/ipld/go-ipld-prime/datamodel"
+import (
+	"github.com/ipld/go-ipld-prime/datamodel"
+)
 
 // Mapper maps query node paths into result node paths.
 //
