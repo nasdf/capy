@@ -1,0 +1,40 @@
+{{- range $name, $kind := .}}
+
+{{- if eq $kind.TypeKind.String "enum"}}
+enum {{$kind.Name}} {
+    {{- range $member := .Members}}
+    {{$member}}
+    {{- end}}
+}
+{{- end}}
+
+{{- if eq $kind.TypeKind.String "struct"}}
+type {{$kind.Name}} {
+    {{- range $field := .Fields}}
+    {{$field.Name}}: {{$field.Type.Name}}
+    {{- end}}
+}
+
+input Create{{$kind.Name}}Input {
+    {{- range $field := .Fields}}
+    {{$field.Name}}: {{$field.Type.Name}}
+    {{- end}}
+}
+{{- end}}
+{{- end}}
+
+type Query {
+{{- range $name, $kind := .}}
+{{- if eq $kind.TypeKind.String "struct"}}
+    {{$kind.Name}}: [{{$kind.Name}}!]
+{{- end}}
+{{- end}}
+}
+
+type Mutation {
+{{- range $name, $kind := .}}
+{{- if eq $kind.TypeKind.String "struct"}}
+    create{{$kind.Name}}(input: Create{{$kind.Name}}Input): {{$kind.Name}}
+{{- end}}
+{{- end}}
+}
