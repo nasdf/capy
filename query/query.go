@@ -7,7 +7,6 @@ import (
 	"github.com/nasdf/capy/plan"
 
 	"github.com/99designs/gqlgen/graphql"
-	ipldschema "github.com/ipld/go-ipld-prime/schema"
 	"github.com/vektah/gqlparser/v2"
 	"github.com/vektah/gqlparser/v2/ast"
 )
@@ -24,7 +23,7 @@ type Params struct {
 }
 
 // Parse creates a plan.Node for the given query.
-func Parse(schema *ast.Schema, typeSys *ipldschema.TypeSystem, params *Params) (plan.Node, error) {
+func Parse(schema *ast.Schema, params *Params) (plan.Node, error) {
 	doc, errs := gqlparser.LoadQuery(schema, params.Query)
 	if errs != nil {
 		return nil, errs
@@ -47,27 +46,23 @@ func Parse(schema *ast.Schema, typeSys *ipldschema.TypeSystem, params *Params) (
 
 	switch op.Operation {
 	case ast.Query:
-		return parseQuery(typeSys, fields)
+		return parseQuery(fields)
 	case ast.Mutation:
-		return parseMutation(typeSys, fields, params.Variables)
+		return parseMutation(fields, params.Variables)
 	default:
 		return nil, fmt.Errorf("operation not supported: %s", op.Operation)
 	}
 }
 
-func parseQuery(typeSys *ipldschema.TypeSystem, fields []graphql.CollectedField) (plan.Node, error) {
+func parseQuery(fields []graphql.CollectedField) (plan.Node, error) {
 	sel, err := querySelector(fields).Selector()
 	if err != nil {
 		return nil, err
 	}
-	res, err := spawnResultType(typeSys, fields)
-	if err != nil {
-		return nil, err
-	}
-	return plan.Select(sel, res), nil
+	return plan.Select(sel), nil
 }
 
-func parseMutation(typeSys *ipldschema.TypeSystem, fields []graphql.CollectedField, variables map[string]any) (plan.Node, error) {
+func parseMutation(fields []graphql.CollectedField, variables map[string]any) (plan.Node, error) {
 	ops := make([]plan.Node, len(fields))
 	for i, f := range fields {
 		if strings.HasPrefix(f.Name, createOpPrefix) {
@@ -81,11 +76,7 @@ func parseMutation(typeSys *ipldschema.TypeSystem, fields []graphql.CollectedFie
 	if err != nil {
 		return nil, err
 	}
-	res, err := spawnResultType(typeSys, fields)
-	if err != nil {
-		return nil, err
-	}
-	return plan.Select(sel, res, ops...), nil
+	return plan.Select(sel, ops...), nil
 }
 
 func parseCreateOperation(field graphql.CollectedField, variables map[string]any) plan.Node {

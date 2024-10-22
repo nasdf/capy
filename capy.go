@@ -115,8 +115,8 @@ func (db *DB) Traversal(ctx context.Context) traversal.Progress {
 	}
 }
 
-func (db *DB) Execute(ctx context.Context, params *query.Params) (datamodel.Node, error) {
-	planNode, err := query.Parse(db.schema, db.typeSys, params)
+func (db *DB) Execute(ctx context.Context, params *query.Params) (any, error) {
+	planNode, err := query.Parse(db.schema, params)
 	if err != nil {
 		return nil, err
 	}

@@ -27,5 +27,5 @@ type Storage interface {
 // Node represents an operation to perform on an IPLD graph.
 type Node interface {
 	// Execute returns the results after running the Node operations.
-	Execute(ctx context.Context, store Storage) (datamodel.Node, error)
+	Execute(ctx context.Context, store Storage) (any, error)
 }

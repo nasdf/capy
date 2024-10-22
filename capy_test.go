@@ -2,12 +2,12 @@ package capy
 
 import (
 	"context"
-	"os"
+	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/nasdf/capy/query"
 
-	"github.com/ipld/go-ipld-prime/codec/dagjson"
 	"github.com/stretchr/testify/require"
 )
 
@@ -21,6 +21,9 @@ var testQuery = `mutation {
 	createUser(input: {Name: "Bob", Stuff: ["one", "two"]}) {
 		Name
 		Stuff
+		Friend {
+			Name
+		}
 	}
 }`
 
@@ -35,6 +38,8 @@ func TestBasicQuery(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	err = dagjson.Encode(res, os.Stdout)
+	out, err := json.Marshal(res)
 	require.NoError(t, err)
+
+	fmt.Printf("%s", out)
 }

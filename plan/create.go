@@ -25,7 +25,7 @@ func Create(collection string, input any) Node {
 	}
 }
 
-func (n *createNode) Execute(ctx context.Context, store Storage) (datamodel.Node, error) {
+func (n *createNode) Execute(ctx context.Context, store Storage) (any, error) {
 	root, err := n.createObject(ctx, store)
 	if err != nil {
 		return nil, err
@@ -39,6 +39,8 @@ func (n *createNode) Execute(ctx context.Context, store Storage) (datamodel.Node
 }
 
 func (n *createNode) createObject(ctx context.Context, store Storage) (datamodel.Node, error) {
+	// TODO: this does not handle related objects
+	// create a custom node builder that can handle it
 	objType := store.TypeSystem().TypeByName(n.collection)
 	objNode, err := fluent.Reflect(bindnode.Prototype(nil, objType), n.input)
 	if err != nil {
