@@ -3,45 +3,29 @@ package capy
 import (
 	"context"
 
+	"github.com/nasdf/capy/data"
 	"github.com/nasdf/capy/graphql"
+	"github.com/nasdf/capy/plan"
 
-	"github.com/ipfs/go-cid"
-	_ "github.com/ipld/go-ipld-prime/codec/dagcbor"
 	"github.com/ipld/go-ipld-prime/datamodel"
-	"github.com/ipld/go-ipld-prime/linking"
-	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
-	"github.com/ipld/go-ipld-prime/node/basicnode"
 	"github.com/ipld/go-ipld-prime/node/bindnode"
 	"github.com/ipld/go-ipld-prime/schema"
-	"github.com/ipld/go-ipld-prime/storage/memstore"
-	"github.com/ipld/go-ipld-prime/traversal"
 
 	"github.com/vektah/gqlparser/v2/ast"
 )
 
-var LinkPrototype = cidlink.LinkPrototype{Prefix: cid.Prefix{
-	Version:  1,    // Usually '1'.
-	Codec:    0x71, // dag-cbor -- See the multicodecs table: https://github.com/multiformats/multicodec/
-	MhType:   0x13, // sha2-512 -- See the multicodecs table: https://github.com/multiformats/multicodec/
-	MhLength: 64,   // sha2-512 hash has a 64-byte sum.
-}}
-
-var LinkPrototypeChooser = traversal.LinkTargetNodePrototypeChooser(func(l datamodel.Link, lc linking.LinkContext) (datamodel.NodePrototype, error) {
-	return basicnode.Prototype.Any, nil
-})
-
 type DB struct {
-	// linkSys is the linking system used to store and load linked data.
-	linkSys linking.LinkSystem
 	// typeSys is the TypeSystem containing all user defined types.
 	typeSys *schema.TypeSystem
 	// schema contains the generated GraphQL schema.
 	schema *ast.Schema
 	// rootLnk is a link to the root data node.
 	rootLnk datamodel.Link
+	// store contains all db data.
+	store data.Store
 }
 
-func New(ctx context.Context, schemaSrc string) (*DB, error) {
+func New(ctx context.Context, schemaSrc string, store data.Store) (*DB, error) {
 	// generate a TypeSystem from the user defined types
 	typeSys, err := graphql.SpawnTypeSystem(schemaSrc)
 	if err != nil {
@@ -53,57 +37,21 @@ func New(ctx context.Context, schemaSrc string) (*DB, error) {
 		return nil, err
 	}
 
-	store := &memstore.Store{}
-	linkSys := cidlink.DefaultLinkSystem()
-	linkSys.SetReadStorage(store)
-	linkSys.SetWriteStorage(store)
-
-	// create an empty root node
-	rootType := typeSys.TypeByName(graphql.RootTypeName)
+	rootType := typeSys.TypeByName(data.RootTypeName)
 	rootNode := bindnode.Prototype(nil, rootType).NewBuilder().Build()
 
-	rootLnk, err := linkSys.Store(linking.LinkContext{Ctx: ctx}, LinkPrototype, rootNode)
+	// create an empty root node
+	rootLnk, err := store.Store(ctx, rootNode)
 	if err != nil {
 		return nil, err
 	}
 
 	return &DB{
-		linkSys: linkSys,
+		store:   store,
 		typeSys: typeSys,
 		schema:  genSchema,
 		rootLnk: rootLnk,
 	}, nil
-}
-
-func (db *DB) TypeSystem() *schema.TypeSystem {
-	return db.typeSys
-}
-
-func (db *DB) GetRootLink() datamodel.Link {
-	return db.rootLnk
-}
-
-func (db *DB) SetRootLink(lnk datamodel.Link) {
-	db.rootLnk = lnk
-}
-
-func (db *DB) Load(ctx context.Context, lnk datamodel.Link) (datamodel.Node, error) {
-	return db.linkSys.Load(linking.LinkContext{Ctx: ctx}, lnk, basicnode.Prototype.Any) // TODO replace this with a type from the schema system
-}
-
-func (db *DB) Store(ctx context.Context, node datamodel.Node) (datamodel.Link, error) {
-	return db.linkSys.Store(linking.LinkContext{Ctx: ctx}, LinkPrototype, node)
-}
-
-func (db *DB) Traversal(ctx context.Context) traversal.Progress {
-	cfg := &traversal.Config{
-		Ctx:                            ctx,
-		LinkSystem:                     db.linkSys,
-		LinkTargetNodePrototypeChooser: LinkPrototypeChooser,
-	}
-	return traversal.Progress{
-		Cfg: cfg,
-	}
 }
 
 func (db *DB) Execute(ctx context.Context, params graphql.QueryParams) (any, error) {
@@ -111,5 +59,11 @@ func (db *DB) Execute(ctx context.Context, params graphql.QueryParams) (any, err
 	if err != nil {
 		return nil, err
 	}
-	return planNode.Execute(ctx, db)
+	planner := plan.NewPlanner(db.store, *db.typeSys, db.rootLnk)
+	rootLnk, res, err := planner.Execute(ctx, planNode)
+	if err != nil {
+		return nil, err
+	}
+	db.rootLnk = rootLnk
+	return res, nil
 }

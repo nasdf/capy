@@ -16,7 +16,12 @@ type Request struct {
 func (r *Request) selectorSpec() builder.SelectorSpec {
 	return ssb.ExploreFields(func(efsb builder.ExploreFieldsSpecBuilder) {
 		for _, f := range r.Fields {
-			efsb.Insert(f.Name, ssb.ExploreAll(f.selectorSpec()))
+			index, ok := f.Arguments["id"]
+			if ok {
+				efsb.Insert(f.Name, ssb.ExploreIndex(index.(int64), f.selectorSpec()))
+			} else {
+				efsb.Insert(f.Name, ssb.ExploreAll(f.selectorSpec()))
+			}
 		}
 	})
 }

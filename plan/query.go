@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/ipld/go-ipld-prime/datamodel"
-	"github.com/ipld/go-ipld-prime/traversal"
 )
 
 type queryNode struct {
@@ -19,18 +18,17 @@ func Query(req Request) Node {
 	}
 }
 
-func (n *queryNode) Execute(ctx context.Context, store Storage) (any, error) {
-	root, err := store.Load(ctx, store.GetRootLink())
-	if err != nil {
-		return nil, err
+func (n *queryNode) Execute(ctx context.Context, p *Planner) (*Result, error) {
+	for i, f := range n.req.Fields {
+		id, ok := f.Arguments["id"]
+		if !ok {
+			continue
+		}
+		index, err := p.findIndex(ctx, f.Name, id.(datamodel.Link))
+		if err != nil {
+			return nil, err
+		}
+		n.req.Fields[i].Arguments["id"] = index
 	}
-	sel, err := n.req.selectorSpec().Selector()
-	if err != nil {
-		return nil, err
-	}
-	res := NewResult()
-	err = store.Traversal(ctx).WalkMatching(root, sel, func(p traversal.Progress, n datamodel.Node) error {
-		return res.Set(p.Path, n)
-	})
-	return res, err
+	return p.query(ctx, n.req)
 }

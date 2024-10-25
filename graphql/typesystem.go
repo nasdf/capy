@@ -4,13 +4,12 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/nasdf/capy/data"
+
 	"github.com/ipld/go-ipld-prime/schema"
 	"github.com/vektah/gqlparser/v2"
 	"github.com/vektah/gqlparser/v2/ast"
 )
-
-// RootTypeName is the name of the root struct type.
-const RootTypeName = "__Root"
 
 // baseTypes contains all of the scalar and list types.
 var baseTypes = []schema.Type{
@@ -48,7 +47,7 @@ func SpawnTypeSystem(src string) (*schema.TypeSystem, error) {
 			rootFields = append(rootFields, schema.SpawnStructField(n, fmt.Sprintf("[&%s]", n), false, false))
 		}
 	}
-	typeSys.Accumulate(schema.SpawnStruct(RootTypeName, rootFields, schema.SpawnStructRepresentationMap(nil)))
+	typeSys.Accumulate(schema.SpawnStruct(data.RootTypeName, rootFields, schema.SpawnStructRepresentationMap(nil)))
 
 	errs := typeSys.ValidateGraph()
 	if len(errs) > 0 {

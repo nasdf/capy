@@ -9,28 +9,21 @@ import (
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/ipld/go-ipld-prime/node/bindnode"
 	"github.com/ipld/go-ipld-prime/schema"
+	"github.com/nasdf/capy/data"
 )
 
-// Store is the minimal store interface for the node builder.
-type Store interface {
-	Store(ctx context.Context, node datamodel.Node) (datamodel.Link, error)
-}
-
-// Builder creates nodes from go values.
 type Builder struct {
-	store Store
+	store data.Store
 	links map[string][]datamodel.Link
 }
 
-// NewBuilder returns a new empty builder that saves nodes in the given store.
-func NewBuilder(store Store) *Builder {
+func NewBuilder(store data.Store) *Builder {
 	return &Builder{
 		store: store,
 		links: make(map[string][]datamodel.Link),
 	}
 }
 
-// Links returns a mapping of type names to links that have been created by this builder.
 func (b *Builder) Links() map[string][]datamodel.Link {
 	return b.links
 }
