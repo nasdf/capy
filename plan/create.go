@@ -4,10 +4,9 @@ import (
 	"context"
 
 	"github.com/ipld/go-ipld-prime/datamodel"
-	"github.com/ipld/go-ipld-prime/fluent"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
-	"github.com/ipld/go-ipld-prime/node/bindnode"
 	"github.com/ipld/go-ipld-prime/traversal"
+	"github.com/nasdf/capy/node"
 )
 
 type createNode struct {
@@ -26,27 +25,12 @@ func Create(collection string, input any) Node {
 }
 
 func (n *createNode) Execute(ctx context.Context, store Storage) (any, error) {
-	root, err := n.createObject(ctx, store)
-	if err != nil {
-		return nil, err
-	}
-	rootLnk, err := store.Store(ctx, root)
-	if err != nil {
-		return nil, err
-	}
-	store.SetRootLink(rootLnk)
-	return nil, nil
-}
-
-func (n *createNode) createObject(ctx context.Context, store Storage) (datamodel.Node, error) {
-	// TODO: this does not handle related objects
-	// create a custom node builder that can handle it
-	objType := store.TypeSystem().TypeByName(n.collection)
-	objNode, err := fluent.Reflect(bindnode.Prototype(nil, objType), n.input)
-	if err != nil {
-		return nil, err
-	}
-	lnk, err := store.Store(ctx, objNode)
+	builder := node.NewBuilder(store)
+	// TODO: limit the query to the link returned from the builder
+	// the following select node should only return results containing the created object
+	// it should be possible to tell which indexes were created during this step and use
+	// a range selector to match against them
+	_, err := builder.Build(ctx, store.TypeSystem().TypeByName(n.collection), n.input)
 	if err != nil {
 		return nil, err
 	}
@@ -54,8 +38,21 @@ func (n *createNode) createObject(ctx context.Context, store Storage) (datamodel
 	if err != nil {
 		return nil, err
 	}
-	path := datamodel.ParsePath(n.collection).AppendSegmentString("-")
-	return store.Traversal(ctx).FocusedTransform(root, path, func(p traversal.Progress, n datamodel.Node) (datamodel.Node, error) {
-		return basicnode.NewLink(lnk), nil
-	}, true)
+	for col, lnks := range builder.Links() {
+		for _, lnk := range lnks {
+			path := datamodel.ParsePath(col).AppendSegmentString("-")
+			root, err = store.Traversal(ctx).FocusedTransform(root, path, func(p traversal.Progress, n datamodel.Node) (datamodel.Node, error) {
+				return basicnode.NewLink(lnk), nil
+			}, true)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	rootLnk, err := store.Store(ctx, root)
+	if err != nil {
+		return nil, err
+	}
+	store.SetRootLink(rootLnk)
+	return nil, nil
 }

@@ -41,6 +41,7 @@ func Parse(schema *ast.Schema, params *Params) (plan.Node, error) {
 
 	fields := graphql.CollectFields(&graphql.OperationContext{
 		Doc:       doc,
+		RawQuery:  params.Query,
 		Variables: params.Variables,
 	}, op.SelectionSet, nil)
 

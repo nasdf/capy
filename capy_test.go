@@ -18,7 +18,7 @@ var testSchema = `type User {
 }`
 
 var testQuery = `mutation {
-	createUser(input: {Name: "Bob", Stuff: ["one", "two"]}) {
+	createUser(input: {Name: "Bob", Stuff: ["one", "two"], Friend: {Name: "Alice"}}) {
 		Name
 		Stuff
 		Friend {

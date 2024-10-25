@@ -97,7 +97,7 @@ func (db *DB) SetRootLink(lnk datamodel.Link) {
 }
 
 func (db *DB) Load(ctx context.Context, lnk datamodel.Link) (datamodel.Node, error) {
-	return db.linkSys.Load(linking.LinkContext{Ctx: ctx}, lnk, basicnode.Prototype.Any)
+	return db.linkSys.Load(linking.LinkContext{Ctx: ctx}, lnk, basicnode.Prototype.Any) // TODO replace this with a type from the schema system
 }
 
 func (db *DB) Store(ctx context.Context, node datamodel.Node) (datamodel.Link, error) {
