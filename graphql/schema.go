@@ -1,4 +1,4 @@
-package schema
+package graphql
 
 import (
 	"bytes"
@@ -22,8 +22,8 @@ var (
 	})
 )
 
-// Generate creates a GraphQL schema from the given TypeSystem.
-func Generate(ts *schema.TypeSystem) (*ast.Schema, error) {
+// GenerateSchema creates a GraphQL schema from the given IPLD schema.TypeSystem.
+func GenerateSchema(ts *schema.TypeSystem) (*ast.Schema, error) {
 	schemaTypes := make(map[string]schema.Type)
 	for n, v := range ts.GetTypes() {
 		if !strings.HasPrefix(n, "__") {
@@ -34,10 +34,7 @@ func Generate(ts *schema.TypeSystem) (*ast.Schema, error) {
 	if err := schemaTemplate.Execute(&out, schemaTypes); err != nil {
 		return nil, err
 	}
-	return gqlparser.LoadSchema(&ast.Source{
-		Name:  "schema.graphql",
-		Input: out.String(),
-	})
+	return gqlparser.LoadSchema(&ast.Source{Input: out.String()})
 }
 
 func nameForCreateInput(t schema.Type) string {

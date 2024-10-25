@@ -25,14 +25,20 @@ func Value(n datamodel.Node) (any, error) {
 		return MapValue(n)
 	case datamodel.Kind_Null:
 		return nil, nil
+	case datamodel.Kind_Link:
+		lnk, err := n.AsLink()
+		if err != nil {
+			return nil, err
+		}
+		return lnk.String(), nil
 	default:
 		return nil, fmt.Errorf("cannot get value from %s", n.Kind().String())
 	}
 }
 
 // MapValue returns a go map containing the values in the given node.
-func MapValue(n datamodel.Node) (map[any]any, error) {
-	out := make(map[any]any)
+func MapValue(n datamodel.Node) (map[string]any, error) {
+	out := make(map[string]any)
 	for iter := n.MapIterator(); !iter.Done(); {
 		k, v, err := iter.Next()
 		if err != nil {
@@ -46,7 +52,7 @@ func MapValue(n datamodel.Node) (map[any]any, error) {
 		if err != nil {
 			return nil, err
 		}
-		out[key] = val
+		out[key.(string)] = val
 	}
 	return out, nil
 }

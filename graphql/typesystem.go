@@ -1,10 +1,11 @@
-package schema
+package graphql
 
 import (
 	"errors"
 	"fmt"
 
 	"github.com/ipld/go-ipld-prime/schema"
+	"github.com/vektah/gqlparser/v2"
 	"github.com/vektah/gqlparser/v2/ast"
 )
 
@@ -28,7 +29,12 @@ var baseTypes = []schema.Type{
 }
 
 // SpawnTypeSystem returns a new TypeSystem containing the user defined types.
-func SpawnTypeSystem(s *ast.Schema) (*schema.TypeSystem, error) {
+func SpawnTypeSystem(src string) (*schema.TypeSystem, error) {
+	s, err := gqlparser.LoadSchema(&ast.Source{Input: src})
+	if err != nil {
+		return nil, err
+	}
+
 	typeSys := schema.MustTypeSystem(baseTypes...)
 	for _, d := range s.Types {
 		if !d.BuiltIn {

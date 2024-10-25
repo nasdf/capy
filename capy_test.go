@@ -6,8 +6,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/nasdf/capy/query"
-
+	"github.com/nasdf/capy/graphql"
 	"github.com/stretchr/testify/require"
 )
 
@@ -33,7 +32,7 @@ func TestBasicQuery(t *testing.T) {
 	db, err := New(ctx, testSchema)
 	require.NoError(t, err)
 
-	res, err := db.Execute(ctx, &query.Params{
+	res, err := db.Execute(ctx, graphql.QueryParams{
 		Query: testQuery,
 	})
 	require.NoError(t, err)

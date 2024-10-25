@@ -3,8 +3,7 @@ package capy
 import (
 	"context"
 
-	"github.com/nasdf/capy/query"
-	"github.com/nasdf/capy/schema"
+	"github.com/nasdf/capy/graphql"
 
 	"github.com/ipfs/go-cid"
 	_ "github.com/ipld/go-ipld-prime/codec/dagcbor"
@@ -13,11 +12,10 @@ import (
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
 	"github.com/ipld/go-ipld-prime/node/bindnode"
-	ipldschema "github.com/ipld/go-ipld-prime/schema"
+	"github.com/ipld/go-ipld-prime/schema"
 	"github.com/ipld/go-ipld-prime/storage/memstore"
 	"github.com/ipld/go-ipld-prime/traversal"
 
-	"github.com/vektah/gqlparser/v2"
 	"github.com/vektah/gqlparser/v2/ast"
 )
 
@@ -36,7 +34,7 @@ type DB struct {
 	// linkSys is the linking system used to store and load linked data.
 	linkSys linking.LinkSystem
 	// typeSys is the TypeSystem containing all user defined types.
-	typeSys *ipldschema.TypeSystem
+	typeSys *schema.TypeSystem
 	// schema contains the generated GraphQL schema.
 	schema *ast.Schema
 	// rootLnk is a link to the root data node.
@@ -44,20 +42,13 @@ type DB struct {
 }
 
 func New(ctx context.Context, schemaSrc string) (*DB, error) {
-	// parse the user provided schema
-	inputSchema, err := gqlparser.LoadSchema(&ast.Source{
-		Input: schemaSrc,
-	})
-	if err != nil {
-		return nil, err
-	}
 	// generate a TypeSystem from the user defined types
-	typeSys, err := schema.SpawnTypeSystem(inputSchema)
+	typeSys, err := graphql.SpawnTypeSystem(schemaSrc)
 	if err != nil {
 		return nil, err
 	}
 	// generate a GraphQL schema containing all operations and types
-	genSchema, err := schema.Generate(typeSys)
+	genSchema, err := graphql.GenerateSchema(typeSys)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +59,7 @@ func New(ctx context.Context, schemaSrc string) (*DB, error) {
 	linkSys.SetWriteStorage(store)
 
 	// create an empty root node
-	rootType := typeSys.TypeByName(schema.RootTypeName)
+	rootType := typeSys.TypeByName(graphql.RootTypeName)
 	rootNode := bindnode.Prototype(nil, rootType).NewBuilder().Build()
 
 	rootLnk, err := linkSys.Store(linking.LinkContext{Ctx: ctx}, LinkPrototype, rootNode)
@@ -84,7 +75,7 @@ func New(ctx context.Context, schemaSrc string) (*DB, error) {
 	}, nil
 }
 
-func (db *DB) TypeSystem() *ipldschema.TypeSystem {
+func (db *DB) TypeSystem() *schema.TypeSystem {
 	return db.typeSys
 }
 
@@ -115,8 +106,8 @@ func (db *DB) Traversal(ctx context.Context) traversal.Progress {
 	}
 }
 
-func (db *DB) Execute(ctx context.Context, params *query.Params) (any, error) {
-	planNode, err := query.Parse(db.schema, params)
+func (db *DB) Execute(ctx context.Context, params graphql.QueryParams) (any, error) {
+	planNode, err := graphql.ParseQuery(db.schema, params)
 	if err != nil {
 		return nil, err
 	}
