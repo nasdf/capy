@@ -35,6 +35,10 @@ func (m *memoryStore) Store(ctx context.Context, node datamodel.Node) (datamodel
 	return m.linkSys.Store(linking.LinkContext{Ctx: ctx}, defaultLinkPrototype, node)
 }
 
+func (m *memoryStore) LinkSystem() linking.LinkSystem {
+	return m.linkSys
+}
+
 func (m *memoryStore) Traversal(ctx context.Context) traversal.Progress {
 	cfg := &traversal.Config{
 		Ctx:                            ctx,

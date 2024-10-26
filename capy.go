@@ -3,13 +3,18 @@ package capy
 import (
 	"context"
 
+	"github.com/ipfs/go-cid"
 	"github.com/nasdf/capy/data"
 	"github.com/nasdf/capy/graphql"
 	"github.com/nasdf/capy/plan"
 
+	"github.com/ipld/go-car/v2"
 	"github.com/ipld/go-ipld-prime/datamodel"
+	"github.com/ipld/go-ipld-prime/node/basicnode"
 	"github.com/ipld/go-ipld-prime/node/bindnode"
 	"github.com/ipld/go-ipld-prime/schema"
+	"github.com/ipld/go-ipld-prime/traversal/selector"
+	"github.com/ipld/go-ipld-prime/traversal/selector/builder"
 
 	"github.com/vektah/gqlparser/v2/ast"
 )
@@ -25,7 +30,7 @@ type DB struct {
 	store data.Store
 }
 
-func New(ctx context.Context, schemaSrc string, store data.Store) (*DB, error) {
+func Open(ctx context.Context, schemaSrc string, store data.Store) (*DB, error) {
 	// generate a TypeSystem from the user defined types
 	typeSys, err := graphql.SpawnTypeSystem(schemaSrc)
 	if err != nil {
@@ -59,11 +64,23 @@ func (db *DB) Execute(ctx context.Context, params graphql.QueryParams) (any, err
 	if err != nil {
 		return nil, err
 	}
-	planner := plan.NewPlanner(db.store, *db.typeSys, db.rootLnk)
+	planner := plan.NewPlanner(db.store, db.typeSys, db.rootLnk)
 	rootLnk, res, err := planner.Execute(ctx, planNode)
 	if err != nil {
 		return nil, err
 	}
 	db.rootLnk = rootLnk
 	return res, nil
+}
+
+// Export exports all of the data into a content addressable archive file.
+func (db *DB) Export(ctx context.Context, path string) error {
+	lsys := db.store.LinkSystem()
+	root, err := cid.Decode(db.rootLnk.String())
+	if err != nil {
+		return err
+	}
+	ssb := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any)
+	sel := ssb.ExploreRecursive(selector.RecursionLimitNone(), ssb.ExploreAll(ssb.ExploreRecursiveEdge())).Node()
+	return car.TraverseToFile(ctx, &lsys, root, sel, path)
 }

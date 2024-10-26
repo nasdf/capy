@@ -34,4 +34,5 @@ type Store interface {
 	Load(ctx context.Context, lnk datamodel.Link, np datamodel.NodePrototype) (datamodel.Node, error)
 	Store(ctx context.Context, node datamodel.Node) (datamodel.Link, error)
 	Traversal(ctx context.Context) traversal.Progress
+	LinkSystem() linking.LinkSystem
 }

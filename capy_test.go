@@ -30,7 +30,7 @@ var testQuery = `mutation {
 func TestBasicQuery(t *testing.T) {
 	ctx := context.Background()
 
-	db, err := New(ctx, testSchema, data.NewMemoryStore())
+	db, err := Open(ctx, testSchema, data.NewMemoryStore())
 	require.NoError(t, err)
 
 	res, err := db.Execute(ctx, graphql.QueryParams{
@@ -57,4 +57,7 @@ func TestBasicQuery(t *testing.T) {
 	require.NoError(t, err)
 
 	fmt.Printf("%s\n", out)
+
+	err = db.Export(ctx, "export.data")
+	require.NoError(t, err)
 }
