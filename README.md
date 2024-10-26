@@ -1,4 +1,9 @@
 # Capy
 
-Capy makes it super easy to build local-first, peer-to-peer, and distributed applications. Define your schemas in GraphQL and use your favorite GraphQL client to create and query data. Export your data to Filecoin for permanent storage or connect to IPFS for multiplayer applications.
+Capy is an embeddable graph database for building applications with verifiable linked data.
 
+## Features
+
+- Define strongly typed schemas using GraphQL
+- Mutate and query linked data using GraphQL
+- Export data to IPFS or Filecoin for permanent storage

@@ -9,7 +9,7 @@ enum {{$kind.Name}} {
 
 {{- if eq $kind.TypeKind.String "struct"}}
 type {{$kind.Name}} {
-    # Link contains the content address of this object.
+    # Link is the content address of this object.
     _link: String!
 {{- range $field := .Fields}}
     {{$field.Name}}: {{nameForType $field.Type}}

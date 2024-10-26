@@ -9,9 +9,6 @@ import (
 	"github.com/ipld/go-ipld-prime/traversal"
 )
 
-// RootTypeName is the name of the root struct type.
-const RootTypeName = "__Root"
-
 type memoryStore struct {
 	linkSys linking.LinkSystem
 }

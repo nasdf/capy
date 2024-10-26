@@ -5,6 +5,7 @@ import (
 
 	"github.com/nasdf/capy/data"
 	"github.com/nasdf/capy/node"
+	"github.com/nasdf/capy/types"
 
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
@@ -42,7 +43,7 @@ func (p *Planner) Execute(ctx context.Context, node Node) (datamodel.Link, any, 
 }
 
 func (p *Planner) query(ctx context.Context, req Request) (any, error) {
-	rootType := p.typeSys.TypeByName(data.RootTypeName)
+	rootType := p.typeSys.TypeByName(types.RootTypeName)
 	rootNode, err := p.store.Load(ctx, p.rootLnk, bindnode.Prototype(nil, rootType))
 	if err != nil {
 		return nil, err
@@ -60,7 +61,7 @@ func (p *Planner) create(ctx context.Context, collection string, value any) (dat
 	if err != nil {
 		return nil, err
 	}
-	rootType := bindnode.Prototype(nil, p.typeSys.TypeByName(data.RootTypeName))
+	rootType := bindnode.Prototype(nil, p.typeSys.TypeByName(types.RootTypeName))
 	rootNode, err := p.store.Load(ctx, p.rootLnk, rootType)
 	if err != nil {
 		return nil, err

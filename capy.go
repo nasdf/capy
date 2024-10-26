@@ -7,6 +7,7 @@ import (
 	"github.com/nasdf/capy/data"
 	"github.com/nasdf/capy/graphql"
 	"github.com/nasdf/capy/plan"
+	"github.com/nasdf/capy/types"
 
 	"github.com/ipld/go-car/v2"
 	"github.com/ipld/go-ipld-prime/datamodel"
@@ -32,7 +33,7 @@ type DB struct {
 
 func Open(ctx context.Context, schemaSrc string, store data.Store) (*DB, error) {
 	// generate a TypeSystem from the user defined types
-	typeSys, err := graphql.SpawnTypeSystem(schemaSrc)
+	typeSys, err := types.SpawnTypeSystem(schemaSrc)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +43,7 @@ func Open(ctx context.Context, schemaSrc string, store data.Store) (*DB, error) 
 		return nil, err
 	}
 
-	rootType := typeSys.TypeByName(data.RootTypeName)
+	rootType := typeSys.TypeByName(types.RootTypeName)
 	rootNode := bindnode.Prototype(nil, rootType).NewBuilder().Build()
 
 	// create an empty root node
