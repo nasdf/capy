@@ -16,8 +16,8 @@ func Mutation(req Request) Node {
 	}
 }
 
-func (n *mutationNode) Execute(ctx context.Context, p *Planner) (*Result, error) {
-	for i, f := range n.req.Fields {
+func (n *mutationNode) Execute(ctx context.Context, p *Planner) (any, error) {
+	for k, f := range n.req.Fields {
 		if !strings.HasPrefix(f.Name, "create") {
 			return nil, fmt.Errorf("unsupported operation %s", f.Name)
 		}
@@ -26,8 +26,9 @@ func (n *mutationNode) Execute(ctx context.Context, p *Planner) (*Result, error)
 		if err != nil {
 			return nil, err
 		}
-		n.req.Fields[i].Name = collection
-		n.req.Fields[i].Arguments["id"] = lnk
+		f.Name = collection
+		f.Arguments["link"] = lnk.String()
+		n.req.Fields[k] = f
 	}
 	return Query(n.req).Execute(ctx, p)
 }

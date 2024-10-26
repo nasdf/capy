@@ -57,31 +57,31 @@ func ParseQuery(schema *ast.Schema, params QueryParams) (plan.Node, error) {
 
 func parseRequest(fields []graphql.CollectedField, variables map[string]any) (plan.Request, error) {
 	req := plan.Request{
-		Fields: make([]plan.RequestField, len(fields)),
+		Fields: make(map[string]plan.Request),
 	}
-	for i, f := range fields {
+	for _, f := range fields {
 		field, err := parseRequestField(f.Field, variables)
 		if err != nil {
 			return plan.Request{}, err
 		}
-		req.Fields[i] = field
+		req.Fields[f.Alias] = field
 	}
 	return req, nil
 }
 
-func parseRequestField(field *ast.Field, variables map[string]any) (plan.RequestField, error) {
-	children := make([]plan.RequestField, len(field.SelectionSet))
-	for i, s := range field.SelectionSet {
-		child, err := parseRequestField(s.(*ast.Field), variables)
+func parseRequestField(field *ast.Field, variables map[string]any) (plan.Request, error) {
+	fields := make(map[string]plan.Request)
+	for _, s := range field.SelectionSet {
+		field := s.(*ast.Field)
+		child, err := parseRequestField(field, variables)
 		if err != nil {
-			return plan.RequestField{}, err
+			return plan.Request{}, err
 		}
-		children[i] = child
+		fields[field.Alias] = child
 	}
-	return plan.RequestField{
+	return plan.Request{
 		Name:      field.Name,
-		Alias:     field.Alias,
 		Arguments: field.ArgumentMap(variables),
-		Children:  children,
+		Fields:    fields,
 	}, nil
 }

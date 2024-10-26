@@ -14,14 +14,15 @@ import (
 var testSchema = `type User {
 	Name: String
 	Stuff: [String]
-	Friend: User
+	Friends: [User]
 }`
 
 var testQuery = `mutation {
-	createUser(input: {Name: "Bob", Stuff: ["one", "two"], Friend: {Name: "Alice"}}) {
+	createUser(input: {Name: "Bob", Stuff: ["one", "two"], Friends: [{Name: "Alice"}]}) {
+		_link
 		Name
 		Stuff
-		Friend {
+		Friends {
 			Name
 		}
 	}
@@ -45,9 +46,8 @@ func TestBasicQuery(t *testing.T) {
 
 	res, err = db.Execute(ctx, graphql.QueryParams{
 		Query: `query {
-			User {
+			User(link: "bafyrgqboaxlfczir6shprxuk5qlloir3a27b4tq6lctxr5ob4vbwhbnvylhc5gspsbiu5nsmvsbjl7utoawpjisua6mlxv3ibooaoedi746ks") {
 				Name
-				Stuff
 			}
 		}`,
 	})
@@ -57,7 +57,4 @@ func TestBasicQuery(t *testing.T) {
 	require.NoError(t, err)
 
 	fmt.Printf("%s\n", out)
-
-	err = db.Export(ctx, "export.data")
-	require.NoError(t, err)
 }

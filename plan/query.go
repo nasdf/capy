@@ -2,8 +2,6 @@ package plan
 
 import (
 	"context"
-
-	"github.com/ipld/go-ipld-prime/datamodel"
 )
 
 type queryNode struct {
@@ -18,17 +16,6 @@ func Query(req Request) Node {
 	}
 }
 
-func (n *queryNode) Execute(ctx context.Context, p *Planner) (*Result, error) {
-	for i, f := range n.req.Fields {
-		id, ok := f.Arguments["id"]
-		if !ok {
-			continue
-		}
-		index, err := p.findIndex(ctx, f.Name, id.(datamodel.Link))
-		if err != nil {
-			return nil, err
-		}
-		n.req.Fields[i].Arguments["id"] = index
-	}
+func (n *queryNode) Execute(ctx context.Context, p *Planner) (any, error) {
 	return p.query(ctx, n.req)
 }

@@ -11,13 +11,12 @@ import (
 	"github.com/ipld/go-ipld-prime/node/bindnode"
 	"github.com/ipld/go-ipld-prime/schema"
 	"github.com/ipld/go-ipld-prime/traversal"
-	"github.com/ipld/go-ipld-prime/traversal/selector/builder"
 )
 
 // Node represents an operation to perform on an IPLD graph.
 type Node interface {
 	// Execute returns the results after running the Node operations.
-	Execute(ctx context.Context, p *Planner) (*Result, error)
+	Execute(ctx context.Context, p *Planner) (any, error)
 }
 
 type Planner struct {
@@ -34,7 +33,7 @@ func NewPlanner(store data.Store, typeSys *schema.TypeSystem, rootLnk datamodel.
 	}
 }
 
-func (p *Planner) Execute(ctx context.Context, node Node) (datamodel.Link, *Result, error) {
+func (p *Planner) Execute(ctx context.Context, node Node) (datamodel.Link, any, error) {
 	res, err := node.Execute(ctx, p)
 	if err != nil {
 		return nil, nil, err
@@ -42,21 +41,17 @@ func (p *Planner) Execute(ctx context.Context, node Node) (datamodel.Link, *Resu
 	return p.rootLnk, res, nil
 }
 
-func (p *Planner) query(ctx context.Context, req Request) (*Result, error) {
+func (p *Planner) query(ctx context.Context, req Request) (any, error) {
 	rootType := p.typeSys.TypeByName(data.RootTypeName)
 	rootNode, err := p.store.Load(ctx, p.rootLnk, bindnode.Prototype(nil, rootType))
 	if err != nil {
 		return nil, err
 	}
-	sel, err := req.selectorSpec().Selector()
-	if err != nil {
-		return nil, err
+	prog := Progress{
+		Ctx:   ctx,
+		Store: p.store,
 	}
-	res := NewResult()
-	err = p.store.Traversal(ctx).WalkMatching(rootNode, sel, func(p traversal.Progress, n datamodel.Node) error {
-		return res.Set(p.Path, n)
-	})
-	return res, err
+	return prog.Walk(rootNode, req)
 }
 
 func (p *Planner) create(ctx context.Context, collection string, value any) (datamodel.Link, error) {
@@ -88,27 +83,4 @@ func (p *Planner) create(ctx context.Context, collection string, value any) (dat
 	}
 	p.rootLnk = rootLnk
 	return lnk, nil
-}
-
-func (p *Planner) findIndex(ctx context.Context, collection string, lnk datamodel.Link) (int64, error) {
-	rootType := bindnode.Prototype(nil, p.typeSys.TypeByName(data.RootTypeName))
-	rootNode, err := p.store.Load(ctx, p.rootLnk, rootType)
-	if err != nil {
-		return -1, err
-	}
-	ssb := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any)
-	sel, err := ssb.ExploreFields(func(efsb builder.ExploreFieldsSpecBuilder) {
-		efsb.Insert(collection, ssb.ExploreAll(ssb.Matcher()))
-	}).Selector()
-	if err != nil {
-		return -1, err
-	}
-	index := int64(-1)
-	return index, p.store.Traversal(ctx).WalkMatching(rootNode, sel, func(p traversal.Progress, n datamodel.Node) error {
-		if p.LastBlock.Link.String() != lnk.String() {
-			return nil
-		}
-		index, err = p.Path.Last().Index()
-		return err
-	})
 }

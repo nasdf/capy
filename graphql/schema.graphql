@@ -9,6 +9,8 @@ enum {{$kind.Name}} {
 
 {{- if eq $kind.TypeKind.String "struct"}}
 type {{$kind.Name}} {
+    # Link contains the content address of this object.
+    _link: String!
 {{- range $field := .Fields}}
     {{$field.Name}}: {{nameForType $field.Type}}
 {{- end}}
@@ -25,7 +27,7 @@ input {{$kind.Name}}CreateInput {
 type Query {
 {{- range $name, $kind := .}}
 {{- if eq $kind.TypeKind.String "struct"}}
-    {{$kind.Name}}: [{{$kind.Name}}!]
+    {{$kind.Name}}(link: String): [{{$kind.Name}}!]
 {{- end}}
 {{- end}}
 }
