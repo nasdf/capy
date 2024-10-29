@@ -13,11 +13,11 @@ import (
 )
 
 type Builder struct {
-	store data.Store
+	store *data.Store
 	links map[string][]datamodel.Link
 }
 
-func NewBuilder(store data.Store) *Builder {
+func NewBuilder(store *data.Store) *Builder {
 	return &Builder{
 		store: store,
 		links: make(map[string][]datamodel.Link),

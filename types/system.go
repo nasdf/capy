@@ -9,8 +9,11 @@ import (
 	"github.com/vektah/gqlparser/v2/ast"
 )
 
-// RootTypeName is the name of the root struct type.
-const RootTypeName = "__Root"
+const (
+	// RootTypeName is the name of the root struct type.
+	RootTypeName        = "__Root"
+	RootSchemaFieldName = "Schema"
+)
 
 // baseTypes contains all of the scalar and list types.
 var baseTypes = []schema.Type{
@@ -42,7 +45,9 @@ func SpawnTypeSystem(src string) (*schema.TypeSystem, error) {
 		}
 	}
 
-	var rootFields []schema.StructField
+	rootFields := []schema.StructField{
+		schema.SpawnStructField(RootSchemaFieldName, "String", false, false),
+	}
 	for n, d := range s.Types {
 		if !d.BuiltIn && d.Kind == ast.Object {
 			rootFields = append(rootFields, schema.SpawnStructField(n, fmt.Sprintf("[&%s]", n), false, false))

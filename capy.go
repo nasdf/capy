@@ -2,20 +2,17 @@ package capy
 
 import (
 	"context"
+	"io"
 
-	"github.com/ipfs/go-cid"
 	"github.com/nasdf/capy/data"
 	"github.com/nasdf/capy/graphql"
 	"github.com/nasdf/capy/plan"
 	"github.com/nasdf/capy/types"
 
-	"github.com/ipld/go-car/v2"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
 	"github.com/ipld/go-ipld-prime/node/bindnode"
 	"github.com/ipld/go-ipld-prime/schema"
-	"github.com/ipld/go-ipld-prime/traversal/selector"
-	"github.com/ipld/go-ipld-prime/traversal/selector/builder"
 
 	"github.com/vektah/gqlparser/v2/ast"
 )
@@ -25,63 +22,93 @@ type DB struct {
 	typeSys *schema.TypeSystem
 	// schema contains the generated GraphQL schema.
 	schema *ast.Schema
-	// rootLnk is a link to the root data node.
-	rootLnk datamodel.Link
+	// rootLink is a link to the root data node.
+	rootLink datamodel.Link
 	// store contains all db data.
-	store data.Store
+	store *data.Store
 }
 
-func Open(ctx context.Context, schemaSrc string, store data.Store) (*DB, error) {
-	// generate a TypeSystem from the user defined types
-	typeSys, err := types.SpawnTypeSystem(schemaSrc)
+// Open creates a new DB with the provided schema types in the given store.
+func Open(ctx context.Context, store *data.Store, schemaString string) (*DB, error) {
+	typeSys, err := types.SpawnTypeSystem(schemaString)
 	if err != nil {
 		return nil, err
 	}
-	// generate a GraphQL schema containing all operations and types
-	genSchema, err := graphql.GenerateSchema(typeSys)
+	schema, err := graphql.GenerateSchema(typeSys)
 	if err != nil {
 		return nil, err
 	}
-
-	rootType := typeSys.TypeByName(types.RootTypeName)
-	rootNode := bindnode.Prototype(nil, rootType).NewBuilder().Build()
-
-	// create an empty root node
-	rootLnk, err := store.Store(ctx, rootNode)
+	// create a new root with the provided schema
+	nb := bindnode.Prototype(nil, typeSys.TypeByName(types.RootTypeName)).NewBuilder()
+	mb, err := nb.BeginMap(1)
 	if err != nil {
 		return nil, err
 	}
-
+	na, err := mb.AssembleEntry(types.RootSchemaFieldName)
+	if err != nil {
+		return nil, err
+	}
+	err = na.AssignString(schemaString)
+	if err != nil {
+		return nil, err
+	}
+	rootLink, err := store.Store(ctx, nb.Build())
+	if err != nil {
+		return nil, err
+	}
 	return &DB{
-		store:   store,
-		typeSys: typeSys,
-		schema:  genSchema,
-		rootLnk: rootLnk,
+		store:    store,
+		typeSys:  typeSys,
+		schema:   schema,
+		rootLink: rootLink,
 	}, nil
 }
 
+// Load returns a DB with existing data from the rootLink in the given store.
+func Load(ctx context.Context, store *data.Store, rootLink datamodel.Link) (*DB, error) {
+	rootNode, err := store.Load(ctx, rootLink, basicnode.Prototype.Any)
+	if err != nil {
+		return nil, err
+	}
+	schemaNode, err := rootNode.LookupByString(types.RootSchemaFieldName)
+	if err != nil {
+		return nil, err
+	}
+	inputSchema, err := schemaNode.AsString()
+	if err != nil {
+		return nil, err
+	}
+	typeSys, err := types.SpawnTypeSystem(inputSchema)
+	if err != nil {
+		return nil, err
+	}
+	schema, err := graphql.GenerateSchema(typeSys)
+	if err != nil {
+		return nil, err
+	}
+	return &DB{
+		store:    store,
+		typeSys:  typeSys,
+		schema:   schema,
+		rootLink: rootLink,
+	}, nil
+}
+
+// Execute runs the operations in the given query.
 func (db *DB) Execute(ctx context.Context, params graphql.QueryParams) (any, error) {
 	planNode, err := graphql.ParseQuery(db.schema, params)
 	if err != nil {
 		return nil, err
 	}
-	planner := plan.NewPlanner(db.store, db.typeSys, db.rootLnk)
+	planner := plan.NewPlanner(db.store, db.typeSys, db.rootLink)
 	rootLnk, res, err := planner.Execute(ctx, planNode)
 	if err != nil {
 		return nil, err
 	}
-	db.rootLnk = rootLnk
+	db.rootLink = rootLnk
 	return res, nil
 }
 
-// Export exports all of the data into a content addressable archive file.
-func (db *DB) Export(ctx context.Context, path string) error {
-	lsys := db.store.LinkSystem()
-	root, err := cid.Decode(db.rootLnk.String())
-	if err != nil {
-		return err
-	}
-	ssb := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any)
-	sel := ssb.ExploreRecursive(selector.RecursionLimitNone(), ssb.ExploreAll(ssb.ExploreRecursiveEdge())).Node()
-	return car.TraverseToFile(ctx, &lsys, root, sel, path)
+func (db *DB) Export(ctx context.Context, out io.Writer) error {
+	return db.store.Export(ctx, db.rootLink, out)
 }

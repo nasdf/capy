@@ -35,7 +35,7 @@ func (r Request) matchFilters(node datamodel.Node) (bool, error) {
 type Progress struct {
 	Ctx   context.Context
 	Link  datamodel.Link
-	Store data.Store
+	Store *data.Store
 }
 
 func (p Progress) Walk(n datamodel.Node, r Request) (any, error) {

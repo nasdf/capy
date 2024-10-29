@@ -21,12 +21,12 @@ type Node interface {
 }
 
 type Planner struct {
-	store   data.Store
+	store   *data.Store
 	typeSys *schema.TypeSystem
 	rootLnk datamodel.Link
 }
 
-func NewPlanner(store data.Store, typeSys *schema.TypeSystem, rootLnk datamodel.Link) *Planner {
+func NewPlanner(store *data.Store, typeSys *schema.TypeSystem, rootLnk datamodel.Link) *Planner {
 	return &Planner{
 		store:   store,
 		typeSys: typeSys,
