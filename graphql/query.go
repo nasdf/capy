@@ -6,7 +6,6 @@ import (
 	"github.com/nasdf/capy/plan"
 
 	"github.com/99designs/gqlgen/graphql"
-	"github.com/vektah/gqlparser/v2"
 	"github.com/vektah/gqlparser/v2/ast"
 )
 
@@ -17,50 +16,42 @@ type QueryParams struct {
 	Variables     map[string]any `json:"variables"`
 }
 
+// QueryResponse contains the fields expected from a GraphQL http response.
+type QueryResponse struct {
+	Data   any      `json:"data"`
+	Errors []string `json:"errors,omitempty"`
+}
+
 // ParseQuery parses a GraphQL query into a plan.Request.
 func ParseQuery(schema *ast.Schema, params QueryParams) (plan.Node, error) {
-	doc, errs := gqlparser.LoadQuery(schema, params.Query)
-	if errs != nil {
-		return nil, errs
-	}
-
-	var op *ast.OperationDefinition
-	if params.OperationName != "" {
-		doc.Operations.ForName(params.OperationName)
-	} else if len(doc.Operations) == 1 {
-		op = doc.Operations[0]
-	}
-	if op == nil {
-		return nil, fmt.Errorf("operation is not defined")
-	}
-
-	fields := graphql.CollectFields(&graphql.OperationContext{
-		Doc:       doc,
-		RawQuery:  params.Query,
-		Variables: params.Variables,
-	}, op.SelectionSet, nil)
-
-	req, err := parseRequest(fields, params.Variables)
+	exec, err := buildExecContext(schema, params)
 	if err != nil {
 		return nil, err
 	}
-
-	switch op.Operation {
+	fields := exec.collectFields(exec.operation.SelectionSet, nil)
+	if IsIntrospect(fields) {
+		return plan.Introspect(Introspect(exec)), nil
+	}
+	req, err := parseRequest(exec, fields)
+	if err != nil {
+		return nil, err
+	}
+	switch exec.operation.Operation {
 	case ast.Query:
 		return plan.Query(req), nil
 	case ast.Mutation:
 		return plan.Mutation(req), nil
 	default:
-		return nil, fmt.Errorf("unsupported operation %s", op.Operation)
+		return nil, fmt.Errorf("unsupported operation %s", exec.operation.Operation)
 	}
 }
 
-func parseRequest(fields []graphql.CollectedField, variables map[string]any) (plan.Request, error) {
+func parseRequest(exec *execContext, fields []graphql.CollectedField) (plan.Request, error) {
 	req := plan.Request{
 		Fields: make(map[string]plan.Request),
 	}
 	for _, f := range fields {
-		field, err := parseRequestField(f.Field, variables)
+		field, err := parseRequestField(exec, f.Field)
 		if err != nil {
 			return plan.Request{}, err
 		}
@@ -69,11 +60,11 @@ func parseRequest(fields []graphql.CollectedField, variables map[string]any) (pl
 	return req, nil
 }
 
-func parseRequestField(field *ast.Field, variables map[string]any) (plan.Request, error) {
+func parseRequestField(exec *execContext, field *ast.Field) (plan.Request, error) {
 	fields := make(map[string]plan.Request)
 	for _, s := range field.SelectionSet {
 		field := s.(*ast.Field)
-		child, err := parseRequestField(field, variables)
+		child, err := parseRequestField(exec, field)
 		if err != nil {
 			return plan.Request{}, err
 		}
@@ -81,7 +72,7 @@ func parseRequestField(field *ast.Field, variables map[string]any) (plan.Request
 	}
 	return plan.Request{
 		Name:      field.Name,
-		Arguments: field.ArgumentMap(variables),
+		Arguments: field.ArgumentMap(exec.variables),
 		Fields:    fields,
 	}, nil
 }

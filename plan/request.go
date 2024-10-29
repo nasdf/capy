@@ -72,20 +72,24 @@ func (p Progress) walkLink(n datamodel.Node, r Request) (any, error) {
 func (p Progress) walkMap(n datamodel.Node, r Request) (map[string]any, error) {
 	out := make(map[string]any)
 	for alias, field := range r.Fields {
-		// link references the currently loaded link
-		if field.Name == "_link" {
+		switch field.Name {
+		case "_link":
 			out[alias] = p.Link.String()
-			continue
+
+		case "__typename":
+			out[alias] = r.Name
+
+		default:
+			c, err := n.LookupByString(field.Name)
+			if err != nil {
+				return nil, err
+			}
+			v, err := p.Walk(c, field)
+			if err != nil {
+				return nil, err
+			}
+			out[alias] = v
 		}
-		c, err := n.LookupByString(field.Name)
-		if err != nil {
-			return nil, err
-		}
-		v, err := p.Walk(c, field)
-		if err != nil {
-			return nil, err
-		}
-		out[alias] = v
 	}
 	return out, nil
 }
