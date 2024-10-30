@@ -1,6 +1,6 @@
 # Capy
 
-Capy is an embeddable graph database for building applications with verifiable linked data.
+Capy is an embeddable graph database for building applications with verifiable, content addressable, linked data.
 
 ## Features
 

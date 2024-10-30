@@ -8,22 +8,21 @@ import (
 	"text/template"
 
 	"github.com/ipld/go-ipld-prime/schema"
-	"github.com/vektah/gqlparser/v2"
-	"github.com/vektah/gqlparser/v2/ast"
 )
 
-var (
-	//go:embed schema.graphql
-	schemaSource        string
-	schemaTemplate      = template.Must(template.New("schema.graphql").Funcs(schemaTemplateFuncs).Parse(schemaSource))
-	schemaTemplateFuncs = template.FuncMap(map[string]any{
+//go:embed gen_schema.graphql
+var genSchemaSource string
+
+// GenerateSchema creates a GraphQL schema from the given IPLD schema.TypeSystem.
+func GenerateSchema(ts *schema.TypeSystem) (string, error) {
+	templateFuncs := template.FuncMap(map[string]any{
 		"nameForType":        nameForType,
 		"nameForCreateInput": nameForCreateInput,
 	})
-)
-
-// GenerateSchema creates a GraphQL schema from the given IPLD schema.TypeSystem.
-func GenerateSchema(ts *schema.TypeSystem) (*ast.Schema, error) {
+	schemaTemplate, err := template.New("").Funcs(templateFuncs).Parse(genSchemaSource)
+	if err != nil {
+		return "", err
+	}
 	schemaTypes := make(map[string]schema.Type)
 	for n, v := range ts.GetTypes() {
 		if !strings.HasPrefix(n, "__") {
@@ -32,9 +31,9 @@ func GenerateSchema(ts *schema.TypeSystem) (*ast.Schema, error) {
 	}
 	var out bytes.Buffer
 	if err := schemaTemplate.Execute(&out, schemaTypes); err != nil {
-		return nil, err
+		return "", err
 	}
-	return gqlparser.LoadSchema(&ast.Source{Input: out.String()})
+	return out.String(), nil
 }
 
 func nameForCreateInput(t schema.Type) string {

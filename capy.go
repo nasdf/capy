@@ -6,35 +6,22 @@ import (
 
 	"github.com/nasdf/capy/data"
 	"github.com/nasdf/capy/graphql"
-	"github.com/nasdf/capy/plan"
 	"github.com/nasdf/capy/types"
 
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
 	"github.com/ipld/go-ipld-prime/node/bindnode"
-	"github.com/ipld/go-ipld-prime/schema"
-
-	"github.com/vektah/gqlparser/v2/ast"
 )
 
 type DB struct {
-	// typeSys is the TypeSystem containing all user defined types.
-	typeSys *schema.TypeSystem
-	// schema contains the generated GraphQL schema.
-	schema *ast.Schema
-	// rootLink is a link to the root data node.
+	schema   *graphql.ExecutableSchema
 	rootLink datamodel.Link
-	// store contains all db data.
-	store *data.Store
+	store    *data.Store
 }
 
 // Open creates a new DB with the provided schema types in the given store.
 func Open(ctx context.Context, store *data.Store, schemaString string) (*DB, error) {
 	typeSys, err := types.SpawnTypeSystem(schemaString)
-	if err != nil {
-		return nil, err
-	}
-	schema, err := graphql.GenerateSchema(typeSys)
 	if err != nil {
 		return nil, err
 	}
@@ -56,11 +43,14 @@ func Open(ctx context.Context, store *data.Store, schemaString string) (*DB, err
 	if err != nil {
 		return nil, err
 	}
+	schema, err := graphql.NewExectuableSchema(typeSys, store)
+	if err != nil {
+		return nil, err
+	}
 	return &DB{
-		store:    store,
-		typeSys:  typeSys,
 		schema:   schema,
 		rootLink: rootLink,
+		store:    store,
 	}, nil
 }
 
@@ -82,30 +72,24 @@ func Load(ctx context.Context, store *data.Store, rootLink datamodel.Link) (*DB,
 	if err != nil {
 		return nil, err
 	}
-	schema, err := graphql.GenerateSchema(typeSys)
+	schema, err := graphql.NewExectuableSchema(typeSys, store)
 	if err != nil {
 		return nil, err
 	}
 	return &DB{
-		store:    store,
-		typeSys:  typeSys,
 		schema:   schema,
 		rootLink: rootLink,
+		store:    store,
 	}, nil
 }
 
 // Execute runs the operations in the given query.
 func (db *DB) Execute(ctx context.Context, params graphql.QueryParams) (any, error) {
-	planNode, err := graphql.ParseQuery(db.schema, params)
+	res, lnk, err := db.schema.Execute(ctx, db.rootLink, params)
 	if err != nil {
 		return nil, err
 	}
-	planner := plan.NewPlanner(db.store, db.typeSys, db.rootLink)
-	rootLnk, res, err := planner.Execute(ctx, planNode)
-	if err != nil {
-		return nil, err
-	}
-	db.rootLink = rootLnk
+	db.rootLink = lnk
 	return res, nil
 }
 

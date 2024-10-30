@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 
 	"github.com/nasdf/capy"
 	"github.com/nasdf/capy/graphql"
@@ -25,12 +24,17 @@ func Handler(db *capy.DB) http.Handler {
 		var params graphql.QueryParams
 		switch r.Method {
 		case http.MethodGet:
-			p, err := parseQueryParams(r.URL.Query())
+			query := r.URL.Query()
+			params.Query = query.Get("query")
+			params.OperationName = query.Get("operationName")
+			if !query.Has("variables") {
+				break
+			}
+			err := json.Unmarshal([]byte(query.Get("variables")), &params.Variables)
 			if err != nil {
-				http.Error(w, fmt.Sprintf("failed to parse params: %v", err), http.StatusBadRequest)
+				http.Error(w, fmt.Sprintf("failed to parse variables: %v", err), http.StatusBadRequest)
 				return
 			}
-			params = p
 
 		case http.MethodPost:
 			err := json.NewDecoder(r.Body).Decode(&params)
@@ -57,19 +61,4 @@ func Handler(db *capy.DB) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(out)
 	})
-}
-
-func parseQueryParams(query url.Values) (graphql.QueryParams, error) {
-	params := graphql.QueryParams{
-		Query:         query.Get("query"),
-		OperationName: query.Get("operationName"),
-	}
-	if !query.Has("variables") {
-		return graphql.QueryParams{}, nil
-	}
-	err := json.Unmarshal([]byte(query.Get("variables")), &params.Variables)
-	if err != nil {
-		return graphql.QueryParams{}, err
-	}
-	return params, nil
 }
