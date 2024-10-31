@@ -144,7 +144,9 @@ func (e *ExecutableSchema) createMutation(ctx context.Context, rootLink datamode
 		}
 	}
 
+	// set the field name so we query the correct collection
 	field.Name = collection
+	// set the span so we only query the newly created object
 	ctx = context.WithValue(ctx, spanContextKey, int64(-1))
 
 	rootLink, err = e.store.Store(ctx, rootNode)

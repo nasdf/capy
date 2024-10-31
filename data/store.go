@@ -10,6 +10,7 @@ import (
 	"github.com/ipld/go-ipld-prime/linking"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
+	"github.com/ipld/go-ipld-prime/schema"
 	"github.com/ipld/go-ipld-prime/storage/memstore"
 	"github.com/ipld/go-ipld-prime/traversal"
 	"github.com/ipld/go-ipld-prime/traversal/selector"
@@ -28,6 +29,9 @@ var defaultLinkPrototype = cidlink.LinkPrototype{Prefix: cid.Prefix{
 }}
 
 var defaultNodePrototypeChooser = traversal.LinkTargetNodePrototypeChooser(func(l datamodel.Link, lc linking.LinkContext) (datamodel.NodePrototype, error) {
+	if t, ok := l.(schema.TypedLinkNode); ok {
+		return t.LinkTargetNodePrototype(), nil
+	}
 	return basicnode.Prototype.Any, nil
 })
 

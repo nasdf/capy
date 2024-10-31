@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	_ "embed"
+	"fmt"
 
 	"github.com/nasdf/capy"
 	"github.com/nasdf/capy/data"
@@ -11,6 +12,8 @@ import (
 
 //go:embed schema.graphql
 var schema string
+
+const address = "localhost:8080"
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -21,7 +24,8 @@ func main() {
 		panic(err)
 	}
 
-	err = http.ListenAndServe(db, ":8080")
+	fmt.Printf("Open a browser and navigate to %s\n", address)
+	err = http.ListenAndServe(db, address)
 	if err != nil {
 		panic(err)
 	}

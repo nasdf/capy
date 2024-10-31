@@ -1,3 +1,13 @@
-type User {
-    name: String
+type Film {
+	title: String
+	actors: [Actor]
+	director: Director
+}
+
+type Actor {
+	name: String
+}
+
+type Director {
+	name: String
 }
