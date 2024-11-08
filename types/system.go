@@ -1,117 +1,68 @@
 package types
 
 import (
-	"errors"
-	"fmt"
-
+	"github.com/ipld/go-ipld-prime/datamodel"
+	"github.com/ipld/go-ipld-prime/node/bindnode"
 	"github.com/ipld/go-ipld-prime/schema"
+	ipldschema "github.com/ipld/go-ipld-prime/schema"
 	"github.com/vektah/gqlparser/v2"
 	"github.com/vektah/gqlparser/v2/ast"
 )
 
-const (
-	// RootTypeName is the name of the root struct type.
-	RootTypeName        = "__Root"
-	RootSchemaFieldName = "Schema"
-)
-
-// baseTypes contains all of the scalar and list types.
-var baseTypes = []schema.Type{
-	schema.SpawnInt("Int"),
-	schema.SpawnFloat("Float"),
-	schema.SpawnBool("Boolean"),
-	schema.SpawnString("String"),
-	schema.SpawnList("[Int]", "Int", true),
-	schema.SpawnList("[Int!]", "Int", false),
-	schema.SpawnList("[Float]", "Float", true),
-	schema.SpawnList("[Float!]", "Float", false),
-	schema.SpawnList("[Boolean]", "Boolean", true),
-	schema.SpawnList("[Boolean!]", "Boolean", false),
-	schema.SpawnList("[String]", "String", true),
-	schema.SpawnList("[String!]", "String", false),
+type System struct {
+	schema      string
+	system      *ipldschema.TypeSystem
+	collections []string
 }
 
-// SpawnTypeSystem returns a new TypeSystem containing the user defined types.
-func SpawnTypeSystem(src string) (*schema.TypeSystem, error) {
-	s, err := gqlparser.LoadSchema(&ast.Source{Input: src})
+func NewSystem(schema string) (*System, error) {
+	s, err := gqlparser.LoadSchema(&ast.Source{Input: schema})
 	if err != nil {
 		return nil, err
 	}
-
-	typeSys := schema.MustTypeSystem(baseTypes...)
+	collections := []string{}
 	for _, d := range s.Types {
-		if !d.BuiltIn {
-			accumulateSchemaType(typeSys, s, d)
-		}
-	}
-
-	rootFields := []schema.StructField{
-		schema.SpawnStructField(RootSchemaFieldName, "String", false, false),
-	}
-	for n, d := range s.Types {
 		if !d.BuiltIn && d.Kind == ast.Object {
-			rootFields = append(rootFields, schema.SpawnStructField(n, fmt.Sprintf("[&%s]", n), false, false))
+			collections = append(collections, d.Name)
 		}
 	}
-	typeSys.Accumulate(schema.SpawnStruct(RootTypeName, rootFields, schema.SpawnStructRepresentationMap(nil)))
-
-	errs := typeSys.ValidateGraph()
-	if len(errs) > 0 {
-		return nil, errors.Join(errs...)
+	system, err := accumulate(s, collections)
+	if err != nil {
+		return nil, err
 	}
-	return typeSys, nil
+	return &System{
+		schema:      schema,
+		system:      system,
+		collections: collections,
+	}, nil
 }
 
-func accumulateSchemaType(ts *schema.TypeSystem, s *ast.Schema, d *ast.Definition) {
-	switch d.Kind {
-	case ast.Object:
-		accumulateSchemaStructType(ts, s, d)
-	case ast.Enum:
-		accumulateSchemaEnumType(ts, d)
-	default:
-		panic(fmt.Sprintf("unsupported kind %s", d.Kind))
-	}
+func (s System) Type(name string) schema.Type {
+	return s.system.TypeByName(name)
 }
 
-func accumulateSchemaEnumType(ts *schema.TypeSystem, d *ast.Definition) {
-	members := make([]string, len(d.EnumValues))
-	repr := make(schema.EnumRepresentation_String)
-	for i, v := range d.EnumValues {
-		members[i] = v.Name
-		repr[v.Name] = v.Name
-	}
-	ts.Accumulate(schema.SpawnEnum(d.Name, members, repr))
+func (s System) Prototype(name string) datamodel.NodePrototype {
+	return bindnode.Prototype(nil, s.Type(name))
 }
 
-func accumulateSchemaStructType(ts *schema.TypeSystem, s *ast.Schema, d *ast.Definition) {
-	fields := make([]schema.StructField, len(d.Fields))
-	for i, field := range d.Fields {
-		var name string
-		var nonNull bool
-		if field.Type.Elem != nil {
-			name = field.Type.Elem.NamedType
-			nonNull = field.Type.Elem.NonNull
-		} else {
-			name = field.Type.NamedType
-			nonNull = field.Type.NonNull
-		}
-		t, ok := s.Types[name]
-		if ok && t.Kind == ast.Object {
-			name = "&" + name
-		}
-		if nonNull {
-			name = name + "!"
-		}
-		if field.Type.Elem != nil {
-			name = fmt.Sprintf("[%s]", name)
-		}
-		fields[i] = schema.SpawnStructField(field.Name, name, !nonNull, !nonNull)
-	}
-	ts.Accumulate(schema.SpawnStruct(d.Name, fields, schema.SpawnStructRepresentationMap(nil)))
-	ts.Accumulate(schema.SpawnList(fmt.Sprintf("[%s]", d.Name), d.Name, true))
-	ts.Accumulate(schema.SpawnList(fmt.Sprintf("[%s!]", d.Name), d.Name, false))
+func (s System) Collections() []string {
+	return s.collections
+}
 
-	ts.Accumulate(schema.SpawnLinkReference("&"+d.Name, d.Name))
-	ts.Accumulate(schema.SpawnList(fmt.Sprintf("[&%s]", d.Name), "&"+d.Name, true))
-	ts.Accumulate(schema.SpawnList(fmt.Sprintf("[&%s!]", d.Name), "&"+d.Name, false))
+// RootNode returns a new empty root node.
+func (s System) RootNode() (datamodel.Node, error) {
+	nb := s.Prototype(RootTypeName).NewBuilder()
+	mb, err := nb.BeginMap(1)
+	if err != nil {
+		return nil, err
+	}
+	na, err := mb.AssembleEntry(RootSchemaFieldName)
+	if err != nil {
+		return nil, err
+	}
+	err = na.AssignString(s.schema)
+	if err != nil {
+		return nil, err
+	}
+	return nb.Build(), nil
 }

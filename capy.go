@@ -2,60 +2,56 @@ package capy
 
 import (
 	"context"
-	"io"
 
-	"github.com/nasdf/capy/data"
+	"github.com/nasdf/capy/core"
 	"github.com/nasdf/capy/graphql"
 	"github.com/nasdf/capy/types"
 
-	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
-	"github.com/ipld/go-ipld-prime/node/bindnode"
+	"github.com/vektah/gqlparser/v2/ast"
 )
 
 type DB struct {
-	schema   *graphql.ExecutableSchema
-	rootLink datamodel.Link
-	store    *data.Store
+	Store  *core.Store
+	Types  *types.System
+	Schema *ast.Schema
 }
 
-// Open creates a new DB with the provided schema types in the given store.
-func Open(ctx context.Context, store *data.Store, schemaString string) (*DB, error) {
-	typeSys, err := types.SpawnTypeSystem(schemaString)
+// New creates a new DB with the provided schema types in the given store.
+func New(ctx context.Context, store *core.Store, schema string) (*DB, error) {
+	system, err := types.NewSystem(schema)
 	if err != nil {
 		return nil, err
 	}
-	// create a new root with the provided schema
-	nb := bindnode.Prototype(nil, typeSys.TypeByName(types.RootTypeName)).NewBuilder()
-	mb, err := nb.BeginMap(1)
+	genSchema, err := graphql.GenerateSchema(system)
 	if err != nil {
 		return nil, err
 	}
-	na, err := mb.AssembleEntry(types.RootSchemaFieldName)
+	rootNode, err := system.RootNode()
 	if err != nil {
 		return nil, err
 	}
-	err = na.AssignString(schemaString)
+	rootLink, err := store.Store(ctx, rootNode)
 	if err != nil {
 		return nil, err
 	}
-	rootLink, err := store.Store(ctx, nb.Build())
-	if err != nil {
-		return nil, err
-	}
-	schema, err := graphql.NewExectuableSchema(typeSys, store)
+	err = store.SetRootLink(ctx, rootLink)
 	if err != nil {
 		return nil, err
 	}
 	return &DB{
-		schema:   schema,
-		rootLink: rootLink,
-		store:    store,
+		Store:  store,
+		Types:  system,
+		Schema: genSchema,
 	}, nil
 }
 
-// Load returns a DB with existing data from the rootLink in the given store.
-func Load(ctx context.Context, store *data.Store, rootLink datamodel.Link) (*DB, error) {
+// Open returns a DB with existing data from the rootLink in the given store.
+func Open(ctx context.Context, store *core.Store) (*DB, error) {
+	rootLink, err := store.RootLink(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rootNode, err := store.Load(ctx, rootLink, basicnode.Prototype.Any)
 	if err != nil {
 		return nil, err
@@ -64,35 +60,25 @@ func Load(ctx context.Context, store *data.Store, rootLink datamodel.Link) (*DB,
 	if err != nil {
 		return nil, err
 	}
-	inputSchema, err := schemaNode.AsString()
+	schema, err := schemaNode.AsString()
 	if err != nil {
 		return nil, err
 	}
-	typeSys, err := types.SpawnTypeSystem(inputSchema)
+	system, err := types.NewSystem(schema)
 	if err != nil {
 		return nil, err
 	}
-	schema, err := graphql.NewExectuableSchema(typeSys, store)
+	genSchema, err := graphql.GenerateSchema(system)
 	if err != nil {
 		return nil, err
 	}
 	return &DB{
-		schema:   schema,
-		rootLink: rootLink,
-		store:    store,
+		Store:  store,
+		Types:  system,
+		Schema: genSchema,
 	}, nil
 }
 
-// Execute runs the operations in the given query.
 func (db *DB) Execute(ctx context.Context, params graphql.QueryParams) (any, error) {
-	res, lnk, err := db.schema.Execute(ctx, db.rootLink, params)
-	if err != nil {
-		return nil, err
-	}
-	db.rootLink = lnk
-	return res, nil
-}
-
-func (db *DB) Export(ctx context.Context, out io.Writer) error {
-	return db.store.Export(ctx, db.rootLink, out)
+	return graphql.Execute(ctx, db.Types, db.Store, db.Schema, params)
 }

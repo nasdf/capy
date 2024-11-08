@@ -8,8 +8,10 @@ import (
 	"os"
 
 	"github.com/nasdf/capy"
-	"github.com/nasdf/capy/data"
+	"github.com/nasdf/capy/core"
 	"github.com/nasdf/capy/graphql"
+
+	"github.com/ipld/go-ipld-prime/storage/memstore"
 )
 
 //go:embed schema.graphql
@@ -22,14 +24,12 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	db, err := capy.Open(ctx, data.NewMemStore(), schema)
+	db, err := capy.New(ctx, core.Open(ctx, &memstore.Store{}), schema)
 	if err != nil {
 		panic(err)
 	}
 
-	res, err := db.Execute(ctx, graphql.QueryParams{
-		Query: mutation,
-	})
+	res, err := db.Execute(ctx, graphql.QueryParams{Query: mutation})
 	if err != nil {
 		panic(err)
 	}
@@ -46,7 +46,7 @@ func main() {
 	}
 	defer file.Close()
 
-	err = db.Export(ctx, file)
+	err = core.ExportCAR(ctx, db.Store, file)
 	if err != nil {
 		panic(err)
 	}

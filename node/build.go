@@ -4,45 +4,25 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/nasdf/capy/core"
+
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/ipld/go-ipld-prime/node/bindnode"
 	"github.com/ipld/go-ipld-prime/schema"
-	"github.com/nasdf/capy/data"
 )
 
-type Builder struct {
-	store *data.Store
-	links map[string][]datamodel.Link
-}
-
-func NewBuilder(store *data.Store) *Builder {
-	return &Builder{
-		store: store,
-		links: make(map[string][]datamodel.Link),
-	}
-}
-
-func (b *Builder) Links() map[string][]datamodel.Link {
-	return b.links
-}
-
-// Build returns a new node of the given type by parsing the value.
-func (b *Builder) Build(ctx context.Context, t schema.Type, value any) (datamodel.Link, error) {
+// Build creates a node of the given type and value and returns its unique link.
+func Build(ctx context.Context, store *core.Store, t schema.Type, value any) (datamodel.Link, error) {
 	nb := bindnode.Prototype(nil, t).NewBuilder()
-	if err := b.assignValue(ctx, t, value, nb); err != nil {
+	if err := assignValue(ctx, store, t, value, nb); err != nil {
 		return nil, err
 	}
-	lnk, err := b.store.Store(ctx, nb.Build())
-	if err != nil {
-		return nil, err
-	}
-	b.links[t.Name()] = append(b.links[t.Name()], lnk)
-	return lnk, nil
+	return store.Store(ctx, nb.Build())
 }
 
-func (b *Builder) assignValue(ctx context.Context, t schema.Type, value any, na datamodel.NodeAssembler) error {
+func assignValue(ctx context.Context, store *core.Store, t schema.Type, value any, na datamodel.NodeAssembler) error {
 	switch v := t.(type) {
 	case *schema.TypeBool:
 		return na.AssignBool(value.(bool))
@@ -55,25 +35,25 @@ func (b *Builder) assignValue(ctx context.Context, t schema.Type, value any, na 
 	case *schema.TypeBytes:
 		return na.AssignBytes(value.([]byte))
 	case *schema.TypeList:
-		return b.assignListValue(ctx, v, value.([]any), na)
+		return assignListValue(ctx, store, v, value.([]any), na)
 	case *schema.TypeMap:
-		return b.assignMapValue(ctx, v, value.(map[string]any), na)
+		return assignMapValue(ctx, store, v, value.(map[string]any), na)
 	case *schema.TypeStruct:
-		return b.assignStructValue(ctx, v, value.(map[string]any), na)
+		return assignStructValue(ctx, store, v, value.(map[string]any), na)
 	case *schema.TypeLink:
-		return b.assignLinkValue(ctx, v, value, na)
+		return assignLinkValue(ctx, store, v, value, na)
 	default:
 		return fmt.Errorf("unknown type %s", t.TypeKind().String())
 	}
 }
 
-func (b *Builder) assignListValue(ctx context.Context, t *schema.TypeList, value []any, na datamodel.NodeAssembler) error {
+func assignListValue(ctx context.Context, store *core.Store, t *schema.TypeList, value []any, na datamodel.NodeAssembler) error {
 	la, err := na.BeginList(int64(len(value)))
 	if err != nil {
 		return err
 	}
 	for _, v := range value {
-		err := b.assignValue(ctx, t.ValueType(), v, la.AssembleValue())
+		err := assignValue(ctx, store, t.ValueType(), v, la.AssembleValue())
 		if err != nil {
 			return err
 		}
@@ -81,7 +61,7 @@ func (b *Builder) assignListValue(ctx context.Context, t *schema.TypeList, value
 	return la.Finish()
 }
 
-func (b *Builder) assignMapValue(ctx context.Context, t *schema.TypeMap, value map[string]any, na datamodel.NodeAssembler) error {
+func assignMapValue(ctx context.Context, store *core.Store, t *schema.TypeMap, value map[string]any, na datamodel.NodeAssembler) error {
 	ma, err := na.BeginMap(int64(len(value)))
 	if err != nil {
 		return err
@@ -91,7 +71,7 @@ func (b *Builder) assignMapValue(ctx context.Context, t *schema.TypeMap, value m
 		if err != nil {
 			return err
 		}
-		err = b.assignValue(ctx, t.ValueType(), v, ea)
+		err = assignValue(ctx, store, t.ValueType(), v, ea)
 		if err != nil {
 			return err
 		}
@@ -99,7 +79,7 @@ func (b *Builder) assignMapValue(ctx context.Context, t *schema.TypeMap, value m
 	return ma.Finish()
 }
 
-func (b *Builder) assignStructValue(ctx context.Context, t *schema.TypeStruct, value map[string]any, na datamodel.NodeAssembler) error {
+func assignStructValue(ctx context.Context, store *core.Store, t *schema.TypeStruct, value map[string]any, na datamodel.NodeAssembler) error {
 	ma, err := na.BeginMap(int64(len(value)))
 	if err != nil {
 		return err
@@ -109,7 +89,7 @@ func (b *Builder) assignStructValue(ctx context.Context, t *schema.TypeStruct, v
 		if err != nil {
 			return err
 		}
-		err = b.assignValue(ctx, t.Field(k).Type(), v, ea)
+		err = assignValue(ctx, store, t.Field(k).Type(), v, ea)
 		if err != nil {
 			return err
 		}
@@ -117,7 +97,7 @@ func (b *Builder) assignStructValue(ctx context.Context, t *schema.TypeStruct, v
 	return ma.Finish()
 }
 
-func (b *Builder) assignLinkValue(ctx context.Context, t *schema.TypeLink, value any, na datamodel.NodeAssembler) error {
+func assignLinkValue(ctx context.Context, store *core.Store, t *schema.TypeLink, value any, na datamodel.NodeAssembler) error {
 	switch vt := value.(type) {
 	case string:
 		id, err := cid.Decode(vt)
@@ -130,7 +110,7 @@ func (b *Builder) assignLinkValue(ctx context.Context, t *schema.TypeLink, value
 		if !t.HasReferencedType() {
 			return fmt.Errorf("cannot create link of unknown reference type")
 		}
-		lnk, err := b.Build(ctx, t.ReferencedType(), value)
+		lnk, err := Build(ctx, store, t.ReferencedType(), value)
 		if err != nil {
 			return err
 		}
