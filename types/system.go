@@ -1,6 +1,8 @@
 package types
 
 import (
+	"errors"
+
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/node/bindnode"
 	"github.com/ipld/go-ipld-prime/schema"
@@ -26,9 +28,10 @@ func NewSystem(schema string) (*System, error) {
 			collections = append(collections, d.Name)
 		}
 	}
-	system, err := accumulate(s, collections)
-	if err != nil {
-		return nil, err
+	system := accumulate(s, collections)
+	errs := system.ValidateGraph()
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
 	}
 	return &System{
 		schema:      schema,

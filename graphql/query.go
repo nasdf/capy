@@ -41,15 +41,28 @@ func (e *executionContext) queryRoot(ctx context.Context, rootLink datamodel.Lin
 	if err != nil {
 		return nil, err
 	}
-	obj, err := rootNode.LookupByString(field.Name)
+	return e.queryCollection(ctx, rootNode, field)
+}
+
+func (e *executionContext) queryCollection(ctx context.Context, n datamodel.Node, field graphql.CollectedField) (any, error) {
+	obj, err := n.LookupByString(field.Name)
 	if err != nil {
 		return nil, err
 	}
-	val, err := e.queryField(ctx, obj, field)
-	if err != nil {
-		return nil, err
+	result := make([]any, 0, obj.Length())
+	iter := obj.MapIterator()
+	for !iter.Done() {
+		_, v, err := iter.Next()
+		if err != nil {
+			return nil, err
+		}
+		out, err := e.queryField(ctx, v, field)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, out)
 	}
-	return val, nil
+	return result, nil
 }
 
 func (e *executionContext) queryField(ctx context.Context, n datamodel.Node, field graphql.CollectedField) (any, error) {
@@ -84,25 +97,12 @@ func (e *executionContext) queryLink(ctx context.Context, n datamodel.Node, fiel
 }
 
 func (e *executionContext) queryList(ctx context.Context, n datamodel.Node, field graphql.CollectedField) ([]any, error) {
-	span, hasSpan := ctx.Value(spanContextKey).(int64)
-	ctx = context.WithValue(ctx, spanContextKey, nil)
-
 	result := make([]any, 0, n.Length())
 	iter := n.ListIterator()
 	for !iter.Done() {
-		i, obj, err := iter.Next()
+		_, obj, err := iter.Next()
 		if err != nil {
 			return nil, err
-		}
-		if hasSpan && (span+n.Length()) != i {
-			continue
-		}
-		match, err := e.queryFilter(obj, field)
-		if err != nil {
-			return nil, err
-		}
-		if !match {
-			continue
 		}
 		val, err := e.queryField(ctx, obj, field)
 		if err != nil {
@@ -111,19 +111,6 @@ func (e *executionContext) queryList(ctx context.Context, n datamodel.Node, fiel
 		result = append(result, val)
 	}
 	return result, nil
-}
-
-func (e *executionContext) queryFilter(n datamodel.Node, field graphql.CollectedField) (bool, error) {
-	args := field.ArgumentMap(e.params.Variables)
-	link, ok := args["link"].(string)
-	if !ok {
-		return true, nil
-	}
-	other, err := n.AsLink()
-	if err != nil {
-		return false, err
-	}
-	return link == other.String(), nil
 }
 
 func (e *executionContext) queryMap(ctx context.Context, n datamodel.Node, set ast.SelectionSet) (any, error) {

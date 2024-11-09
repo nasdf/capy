@@ -53,8 +53,7 @@ func (e *executionContext) createMutation(ctx context.Context, rootLink datamode
 		return nil, nil, err
 	}
 
-	// append the object link to the root
-	path := datamodel.ParsePath(collection).AppendSegmentString("-")
+	path := datamodel.ParsePath(collection).AppendSegmentString("1")
 	rootNode, err = e.store.Traversal(ctx).FocusedTransform(rootNode, path, func(p traversal.Progress, n datamodel.Node) (datamodel.Node, error) {
 		return basicnode.NewLink(lnk), nil
 	}, true)
