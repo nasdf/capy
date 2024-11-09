@@ -1,5 +1,4 @@
-[[cases]]
-name = "Simple mutation works"
+description = "Simple mutation works"
 schema = """
   type Film {
     title: String
@@ -13,5 +12,5 @@ params.query = """
     }
   }
 """
-[[response.data.createFilm]]
+[[operations.response.data.createFilm]]
 title = "Hackers"

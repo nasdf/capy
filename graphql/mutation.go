@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/nasdf/capy/node"
 	"github.com/nasdf/capy/types"
 	"github.com/vektah/gqlparser/v2/ast"
@@ -47,13 +48,16 @@ func (e *executionContext) createMutation(ctx context.Context, rootLink datamode
 	if err != nil {
 		return nil, nil, err
 	}
-
 	rootNode, err := e.store.Load(ctx, rootLink, e.system.Prototype(types.RootTypeName))
 	if err != nil {
 		return nil, nil, err
 	}
+	id, err := uuid.NewRandom()
+	if err != nil {
+		return nil, nil, err
+	}
 
-	path := datamodel.ParsePath(collection).AppendSegmentString("1")
+	path := datamodel.ParsePath(collection).AppendSegmentString(id.String())
 	rootNode, err = e.store.Traversal(ctx).FocusedTransform(rootNode, path, func(p traversal.Progress, n datamodel.Node) (datamodel.Node, error) {
 		return basicnode.NewLink(lnk), nil
 	}, true)

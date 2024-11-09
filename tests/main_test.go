@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"io/fs"
 	"testing"
 
@@ -19,14 +20,9 @@ import (
 //go:embed cases/*
 var testCaseFS embed.FS
 
-type TestCaseFile struct {
-	// Cases is a list of all cases to test within a single file.
-	Cases []TestCase `toml:"cases"`
-}
-
 type TestCase struct {
-	// Name is a simple description for the test case.
-	Name string `toml:"name"`
+	// Description is a simple description for the test case.
+	Description string `toml:"description"`
 	// Schema is the GraphQL schema used to create a Capy instance.
 	Schema string `toml:"schema"`
 	// Operations is a list of all GraphQL operations to run in this test case.
@@ -40,39 +36,40 @@ type TestCaseOperation struct {
 	Response graphql.QueryResponse `toml:"response"`
 }
 
-func (tc TestCase) Run(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	store := core.Open(ctx, &memstore.Store{})
-
-	db, err := capy.New(ctx, store, tc.Schema)
-	require.NoError(t, err, "failed to create db")
-
-	for _, op := range tc.Operations {
-		data, err := db.Execute(ctx, op.Params)
-		require.NoError(t, err)
-
-		assert.Equal(t, op.Response.Data, data)
-		assert.Equal(t, op.Response.Errors, err)
-	}
-}
-
 func TestAllCases(t *testing.T) {
 	paths, err := fs.Glob(testCaseFS, "cases/*.toml")
 	require.NoError(t, err)
 
 	for _, path := range paths {
-		t.Logf("Reading test cases: %s", path)
+		t.Logf("Running test cases: %s", path)
 		data, err := fs.ReadFile(testCaseFS, path)
 		require.NoError(t, err, "failed to read file: %s", path)
 
-		var test TestCaseFile
-		err = toml.Unmarshal(data, &test)
+		var testCase TestCase
+		err = toml.Unmarshal(data, &testCase)
 		require.NoError(t, err, "failed to read file: %s", path)
 
-		for _, tc := range test.Cases {
-			t.Run(tc.Name, tc.Run)
-		}
+		t.Run(testCase.Description, func(st *testing.T) {
+			st.Parallel()
+
+			ctx := context.Background()
+			store := core.Open(ctx, &memstore.Store{})
+
+			db, err := capy.New(ctx, store, testCase.Schema)
+			require.NoError(st, err, "failed to create db")
+
+			for _, op := range testCase.Operations {
+				data, err := db.Execute(ctx, op.Params)
+				require.NoError(st, err)
+
+				actual, err := json.Marshal(graphql.QueryResponse{Data: data, Errors: err})
+				require.NoError(t, err)
+
+				expected, err := json.Marshal(op.Response)
+				require.NoError(t, err)
+
+				assert.JSONEq(t, string(expected), string(actual))
+			}
+		})
 	}
 }
