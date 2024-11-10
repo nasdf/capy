@@ -9,7 +9,7 @@ import (
 
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/ipld/go-ipld-prime/datamodel"
-	"github.com/ipld/go-ipld-prime/node/basicnode"
+	"github.com/ipld/go-ipld-prime/schema"
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 )
@@ -100,7 +100,7 @@ func (e *executionContext) queryLink(ctx context.Context, n datamodel.Node, fiel
 	if err != nil {
 		return nil, err
 	}
-	obj, err := e.store.Load(ctx, lnk, basicnode.Prototype.Any)
+	obj, err := e.store.Load(ctx, lnk, node.Prototype(n))
 	if err != nil {
 		return nil, err
 	}
@@ -132,10 +132,8 @@ func (e *executionContext) queryMap(ctx context.Context, n datamodel.Node, set a
 		switch field.Name {
 		case "_link":
 			result[field.Alias] = ctx.Value(linkContextKey).(datamodel.Link).String()
-
 		case "__typename":
-			result[field.Alias] = "" // TODO n.(schema.TypedNode).Type().Name()
-
+			result[field.Alias] = n.(schema.TypedNode).Type().Name()
 		default:
 			obj, err := n.LookupByString(field.Name)
 			if err != nil {

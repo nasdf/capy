@@ -1,0 +1,17 @@
+description: "Mutation with __typename"
+schema: |
+  type Film {
+    title: String
+  }
+operations:
+  - params:
+      query: |
+        mutation {
+          createFilm(data: {title: "Hackers"}) {
+            __typename
+          }
+        }
+    response:
+      data:
+        createFilm:
+          __typename: "Film"

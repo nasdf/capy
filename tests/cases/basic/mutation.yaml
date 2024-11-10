@@ -1,4 +1,4 @@
-description: "Simple mutation works"
+description: "Mutation returns correct results"
 schema: |
   type Film {
     title: String
