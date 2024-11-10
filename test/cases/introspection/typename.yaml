@@ -1,4 +1,4 @@
-description: "Mutation with __typename"
+# This test ensures that __typename resolves to the correct value.
 schema: |
   type Film {
     title: String

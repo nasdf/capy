@@ -1,4 +1,4 @@
-description: "Mutation with __typename"
+# This test ensures that one to one child objects work as expected
 schema: |
   type Node {
     value: Int

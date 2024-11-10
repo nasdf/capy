@@ -61,7 +61,11 @@ func MapValue(n datamodel.Node) (map[string]any, error) {
 func ListValue(n datamodel.Node) ([]any, error) {
 	out := make([]any, n.Length())
 	for iter := n.ListIterator(); !iter.Done(); {
-		i, val, err := iter.Next()
+		i, v, err := iter.Next()
+		if err != nil {
+			return nil, err
+		}
+		val, err := Value(v)
 		if err != nil {
 			return nil, err
 		}

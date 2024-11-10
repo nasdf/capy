@@ -1,4 +1,4 @@
-description: "Mutation returns correct results"
+# This test ensures that mutations return correct results.
 schema: |
   type Film {
     title: String

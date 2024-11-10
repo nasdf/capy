@@ -1,0 +1,17 @@
+# This test ensures that lists work as expected
+schema: |
+  type Record {
+    results: [Int]
+  }
+operations:
+  - params:
+      query: |
+        mutation {
+          createRecord(data: {results: [0, 1, 2, 3]}) {
+            results
+          }
+        }
+    response:
+      data:
+        createRecord:
+          results: [0, 1, 2, 3]

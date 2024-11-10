@@ -1,0 +1,22 @@
+# This test ensures that one to many child objects work as expected
+schema: |
+  type Node {
+    value: Int
+    children: [Node]
+  }
+operations:
+  - params:
+      query: |
+        mutation {
+          createNode(data: {children: [{value: 0}, {value: 1}]}) {
+            children {
+              value
+            }
+          }
+        }
+    response:
+      data:
+        createNode:
+          children: 
+            - value: 0
+            - value: 1
