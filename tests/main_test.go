@@ -2,9 +2,10 @@ package tests
 
 import (
 	"context"
-	"embed"
 	"encoding/json"
 	"io/fs"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/nasdf/capy"
@@ -17,8 +18,21 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-//go:embed cases/*
-var testCaseFS embed.FS
+// paths is a list of all test case paths
+var paths []string
+
+func init() {
+	// get a relative path to all test case files
+	err := fs.WalkDir(os.DirFS("."), "cases", func(path string, d fs.DirEntry, err error) error {
+		if filepath.Ext(path) == ".yaml" {
+			paths = append(paths, path)
+		}
+		return nil
+	})
+	if err != nil {
+		panic(err)
+	}
+}
 
 type TestCase struct {
 	// Description is a simple description for the test case.
@@ -37,12 +51,9 @@ type TestCaseOperation struct {
 }
 
 func TestAllCases(t *testing.T) {
-	paths, err := fs.Glob(testCaseFS, "cases/*.toml")
-	require.NoError(t, err)
-
 	for _, path := range paths {
 		t.Logf("Running test cases: %s", path)
-		data, err := fs.ReadFile(testCaseFS, path)
+		data, err := os.ReadFile(path)
 		require.NoError(t, err, "failed to read file: %s", path)
 
 		var testCase TestCase
