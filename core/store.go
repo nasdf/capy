@@ -2,13 +2,13 @@ package core
 
 import (
 	"context"
-	"fmt"
+
+	"github.com/nasdf/capy/storage"
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/linking"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
-	"github.com/ipld/go-ipld-prime/storage"
 	"github.com/ipld/go-ipld-prime/traversal"
 )
 
@@ -24,12 +24,9 @@ type Store struct {
 // Open returns a new store using the given storage implementation to persist data.
 func Open(ctx context.Context, store storage.Storage) *Store {
 	links := cidlink.DefaultLinkSystem()
-	if r, ok := store.(storage.ReadableStorage); ok {
-		links.SetReadStorage(r)
-	}
-	if w, ok := store.(storage.WritableStorage); ok {
-		links.SetWriteStorage(w)
-	}
+	links.SetReadStorage(store)
+	links.SetWriteStorage(store)
+
 	return &Store{
 		links: links,
 		store: store,
@@ -53,11 +50,7 @@ func (s *Store) Traversal(ctx context.Context) traversal.Progress {
 
 // RootLink returns the current root link from the store.
 func (s *Store) RootLink(ctx context.Context) (datamodel.Link, error) {
-	r, ok := s.store.(storage.ReadableStorage)
-	if !ok {
-		return nil, fmt.Errorf("storage is not readable")
-	}
-	data, err := r.Get(ctx, RootLinkKey)
+	data, err := s.store.Get(ctx, RootLinkKey)
 	if err != nil {
 		return nil, err
 	}
@@ -70,9 +63,5 @@ func (s *Store) RootLink(ctx context.Context) (datamodel.Link, error) {
 
 // SetRootLink sets the store root link to the given link value.
 func (s *Store) SetRootLink(ctx context.Context, lnk datamodel.Link) error {
-	w, ok := s.store.(storage.WritableStorage)
-	if !ok {
-		return fmt.Errorf("storage is not writable")
-	}
-	return w.Put(ctx, RootLinkKey, []byte(lnk.String()))
+	return s.store.Put(ctx, RootLinkKey, []byte(lnk.String()))
 }

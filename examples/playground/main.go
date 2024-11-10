@@ -12,9 +12,9 @@ import (
 	"github.com/nasdf/capy"
 	"github.com/nasdf/capy/core"
 	"github.com/nasdf/capy/graphql"
+	"github.com/nasdf/capy/storage"
 
 	"github.com/99designs/gqlgen/graphql/playground"
-	"github.com/ipld/go-ipld-prime/storage/memstore"
 )
 
 //go:embed schema.graphql
@@ -29,7 +29,7 @@ func main() {
 		address = os.Args[1]
 	}
 
-	db, err := capy.New(ctx, core.Open(ctx, &memstore.Store{}), schema)
+	db, err := capy.New(ctx, core.Open(ctx, storage.NewMemory()), schema)
 	if err != nil {
 		panic(err)
 	}

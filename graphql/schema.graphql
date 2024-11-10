@@ -9,6 +9,9 @@ enum {{$kind.Name}} {
 
 {{- if eq $kind.TypeKind.String "struct"}}
 type {{$kind.Name}} {
+    """
+    The content address of this document.
+    """
     _link: String!
 {{- range $field := .Fields}}
     {{$field.Name}}: {{nameForType $field.Type}}
