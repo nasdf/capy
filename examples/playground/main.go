@@ -29,7 +29,7 @@ func main() {
 		address = os.Args[1]
 	}
 
-	db, err := capy.New(ctx, core.Open(ctx, storage.NewMemory()), schema)
+	db, err := capy.New(ctx, core.Open(storage.NewMemory()), schema)
 	if err != nil {
 		panic(err)
 	}

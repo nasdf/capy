@@ -23,7 +23,7 @@ func New(ctx context.Context, store *core.Store, schema string) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	genSchema, err := graphql.GenerateSchema(system)
+	genSchema, err := graphql.GenerateSchema(schema)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +68,7 @@ func Open(ctx context.Context, store *core.Store) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	genSchema, err := graphql.GenerateSchema(system)
+	genSchema, err := graphql.GenerateSchema(schema)
 	if err != nil {
 		return nil, err
 	}

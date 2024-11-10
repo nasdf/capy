@@ -25,7 +25,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	db, err := capy.New(ctx, core.Open(ctx, storage.NewMemory()), schema)
+	db, err := capy.New(ctx, core.Open(storage.NewMemory()), schema)
 	if err != nil {
 		panic(err)
 	}

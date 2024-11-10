@@ -1,43 +1,47 @@
-{{- range $name, $kind := .}}
-{{- if eq $kind.TypeKind.String "enum"}}
-enum {{$kind.Name}} {
-{{- range $member := .Members}}
-    {{$member}}
+{{- range $name, $type := .Types}}
+{{- if or $type.BuiltIn (ne $type.Kind "OBJECT")}}
+    {{- continue}}
 {{- end}}
-}
-{{- end}}
-
-{{- if eq $kind.TypeKind.String "struct"}}
-type {{$kind.Name}} {
+extend type {{$name}} {
     """
     The content address of this document.
     """
     _link: String!
-{{- range $field := .Fields}}
-    {{$field.Name}}: {{nameForType $field.Type}}
-{{- end}}
 }
 
-input {{$kind.Name}}CreateInput {
+"""
+Input for creating {{$name}} documents.
+"""
+input {{$name}}CreateInput {
 {{- range $field := .Fields}}
-    {{$field.Name}}: {{nameForCreateInput $field.Type}}
+    {{$def := index $.Types $field.Type.Name}}
+    {{- if $def.IsLeafType}}
+    {{$field.Name}}: {{$field.Type.String}}
+    {{- else if and $field.Type.Elem $field.Type.NonNull}}
+    {{$field.Name}}: [{{$field.Type.Name}}CreateInput!]
+    {{- else if $field.Type.Elem}}
+    {{$field.Name}}: [{{$field.Type.Name}}CreateInput]
+    {{- else if $field.Type.NonNull}}
+    {{$field.Name}}: {{$field.Type.Name}}CreateInput!
+    {{- else}}
+    {{$field.Name}}: {{$field.Type.Name}}CreateInput
+    {{- end}}
 {{- end}}
 }
-{{- end}}
 {{- end}}
 
 type Query {
-{{- range $name, $kind := .}}
-{{- if eq $kind.TypeKind.String "struct"}}
-    {{$kind.Name}}(link: String): [{{$kind.Name}}!]
-{{- end}}
+{{- range $name, $type := .Types}}
+    {{- if and (eq $type.Kind "OBJECT") (not $type.BuiltIn)}}
+    {{$name}}: [{{$name}}]
+    {{- end}}
 {{- end}}
 }
 
 type Mutation {
-{{- range $name, $kind := .}}
-{{- if eq $kind.TypeKind.String "struct"}}
-    create{{$kind.Name}}(data: {{$kind.Name}}CreateInput): {{$kind.Name}}
-{{- end}}
+{{- range $name, $type := .Types}}
+    {{- if and (eq $type.Kind "OBJECT") (not $type.BuiltIn)}}
+    create{{$name}}(data: {{$name}}CreateInput): {{$name}}
+    {{- end}}
 {{- end}}
 }

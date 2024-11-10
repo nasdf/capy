@@ -1,0 +1,21 @@
+description: "Mutation with __typename"
+schema: |
+  type Node {
+    value: Int
+    child: Node
+  }
+operations:
+  - params:
+      query: |
+        mutation {
+          createNode(data: {child: {value: 0}}) {
+            child {
+              value
+            }
+          }
+        }
+    response:
+      data:
+        createNode:
+          child: 
+            value: 0

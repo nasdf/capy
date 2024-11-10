@@ -22,7 +22,7 @@ type Store struct {
 }
 
 // Open returns a new store using the given storage implementation to persist data.
-func Open(ctx context.Context, store storage.Storage) *Store {
+func Open(store storage.Storage) *Store {
 	links := cidlink.DefaultLinkSystem()
 	links.SetReadStorage(store)
 	links.SetWriteStorage(store)
@@ -31,21 +31,6 @@ func Open(ctx context.Context, store storage.Storage) *Store {
 		links: links,
 		store: store,
 	}
-}
-
-// Load returns the node matching the given link and built using the given prototype.
-func (s *Store) Load(ctx context.Context, lnk datamodel.Link, np datamodel.NodePrototype) (datamodel.Node, error) {
-	return s.links.Load(linking.LinkContext{Ctx: ctx}, lnk, np)
-}
-
-// Store writes the given node to the store and returns its link.
-func (s *Store) Store(ctx context.Context, node datamodel.Node) (datamodel.Link, error) {
-	return s.links.Store(linking.LinkContext{Ctx: ctx}, defaultLinkPrototype, node)
-}
-
-// Traversal returns a traversal.Progress configured with the default values for this store.
-func (s *Store) Traversal(ctx context.Context) traversal.Progress {
-	return traversal.Progress{Cfg: defaultTraversalConfig(ctx, s.links)}
 }
 
 // RootLink returns the current root link from the store.
@@ -64,4 +49,19 @@ func (s *Store) RootLink(ctx context.Context) (datamodel.Link, error) {
 // SetRootLink sets the store root link to the given link value.
 func (s *Store) SetRootLink(ctx context.Context, lnk datamodel.Link) error {
 	return s.store.Put(ctx, RootLinkKey, []byte(lnk.String()))
+}
+
+// Load returns the node matching the given link and built using the given prototype.
+func (s *Store) Load(ctx context.Context, lnk datamodel.Link, np datamodel.NodePrototype) (datamodel.Node, error) {
+	return s.links.Load(linking.LinkContext{Ctx: ctx}, lnk, np)
+}
+
+// Store writes the given node to the store and returns its link.
+func (s *Store) Store(ctx context.Context, node datamodel.Node) (datamodel.Link, error) {
+	return s.links.Store(linking.LinkContext{Ctx: ctx}, defaultLinkPrototype, node)
+}
+
+// Traversal returns a traversal.Progress configured with the default values for this store.
+func (s *Store) Traversal(ctx context.Context) traversal.Progress {
+	return traversal.Progress{Cfg: defaultTraversalConfig(ctx, s.links)}
 }
