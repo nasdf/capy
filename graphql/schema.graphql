@@ -34,7 +34,7 @@ type Query {
 type Mutation {
 {{- range $name, $kind := .}}
 {{- if eq $kind.TypeKind.String "struct"}}
-    create{{$kind.Name}}(input: {{$kind.Name}}CreateInput): {{$kind.Name}}
+    create{{$kind.Name}}(data: {{$kind.Name}}CreateInput): {{$kind.Name}}
 {{- end}}
 {{- end}}
 }

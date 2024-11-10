@@ -15,10 +15,7 @@ import (
 
 type contextKey string
 
-var (
-	linkContextKey = contextKey("link")
-	spanContextKey = contextKey("span")
-)
+var linkContextKey = contextKey("link")
 
 // QueryParams contains all of the parameters for a query.
 type QueryParams struct {

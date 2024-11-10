@@ -7,7 +7,7 @@ operations:
   - params:
       query: |
         mutation {
-          createFilm(input: {title: "Hackers"}) {
+          createFilm(data: {title: "Hackers"}) {
             title
           }
         }
@@ -15,3 +15,14 @@ operations:
       data:
         createFilm:
           title: "Hackers"
+  - params:
+      query: |
+        mutation {
+          createFilm(data: {title: "Idiocracy"}) {
+            title
+          }
+        }
+    response:
+      data:
+        createFilm:
+          title: "Idiocracy"

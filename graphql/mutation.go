@@ -42,9 +42,9 @@ func (e *executionContext) executeMutation(ctx context.Context, rootLink datamod
 
 func (e *executionContext) createMutation(ctx context.Context, rootLink datamodel.Link, field graphql.CollectedField) (any, datamodel.Link, error) {
 	args := field.ArgumentMap(e.params.Variables)
-	collection := strings.TrimPrefix(field.Name, "create")
+	field.Name = strings.TrimPrefix(field.Name, "create")
 
-	lnk, err := node.Build(ctx, e.store, e.system.Type(collection), args["input"])
+	lnk, err := node.Build(ctx, e.store, e.system.Type(field.Name), args["data"])
 	if err != nil {
 		return nil, nil, err
 	}
@@ -57,18 +57,13 @@ func (e *executionContext) createMutation(ctx context.Context, rootLink datamode
 		return nil, nil, err
 	}
 
-	path := datamodel.ParsePath(collection).AppendSegmentString(id.String())
+	path := datamodel.ParsePath(field.Name).AppendSegmentString(id.String())
 	rootNode, err = e.store.Traversal(ctx).FocusedTransform(rootNode, path, func(p traversal.Progress, n datamodel.Node) (datamodel.Node, error) {
 		return basicnode.NewLink(lnk), nil
 	}, true)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	// set the field name so we query the correct collection
-	field.Name = collection
-	// set the span so we only query the newly created object
-	ctx = context.WithValue(ctx, spanContextKey, int64(-1))
 
 	rootLink, err = e.store.Store(ctx, rootNode)
 	if err != nil {
