@@ -1,0 +1,17 @@
+description: "Simple mutation works"
+schema: |
+  type Film {
+    title: String
+  }
+operations:
+  - params:
+      query: |
+        mutation {
+          createFilm(input: {title: "Hackers"}) {
+            title
+          }
+        }
+    response:
+      data:
+        createFile:
+          title: "Hackers"

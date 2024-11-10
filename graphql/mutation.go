@@ -74,7 +74,7 @@ func (e *executionContext) createMutation(ctx context.Context, rootLink datamode
 	if err != nil {
 		return nil, nil, err
 	}
-	val, err := e.queryRoot(ctx, rootLink, field)
+	val, err := e.queryColletionByID(ctx, rootLink, field, id.String())
 	if err != nil {
 		return nil, nil, err
 	}

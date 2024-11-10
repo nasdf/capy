@@ -4,13 +4,13 @@ go 1.23.3
 
 require (
 	github.com/99designs/gqlgen v0.17.55
-	github.com/BurntSushi/toml v1.4.0
 	github.com/google/uuid v1.6.0
 	github.com/ipfs/go-cid v0.4.1
 	github.com/ipld/go-car/v2 v2.14.2
 	github.com/ipld/go-ipld-prime v0.21.0
 	github.com/stretchr/testify v1.9.0
 	github.com/vektah/gqlparser/v2 v2.5.17
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -40,6 +40,5 @@ require (
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
 	golang.org/x/sys v0.25.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/blake3 v1.3.0 // indirect
 )

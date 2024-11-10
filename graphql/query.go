@@ -26,7 +26,7 @@ func (e *executionContext) executeQuery(ctx context.Context, rootLink datamodel.
 		case "__schema":
 			result[field.Alias] = e.introspectQuerySchema(field)
 		default:
-			res, err := e.queryRoot(ctx, rootLink, field)
+			res, err := e.queryCollection(ctx, rootLink, field)
 			if err != nil {
 				return nil, gqlerror.List{gqlerror.Wrap(err)}
 			}
@@ -36,21 +36,33 @@ func (e *executionContext) executeQuery(ctx context.Context, rootLink datamodel.
 	return result, nil
 }
 
-func (e *executionContext) queryRoot(ctx context.Context, rootLink datamodel.Link, field graphql.CollectedField) (any, error) {
+func (e *executionContext) queryColletionByID(ctx context.Context, rootLink datamodel.Link, field graphql.CollectedField, id string) (any, error) {
 	rootNode, err := e.store.Load(ctx, rootLink, e.system.Prototype(types.RootTypeName))
 	if err != nil {
 		return nil, err
 	}
-	return e.queryCollection(ctx, rootNode, field)
-}
-
-func (e *executionContext) queryCollection(ctx context.Context, n datamodel.Node, field graphql.CollectedField) (any, error) {
-	obj, err := n.LookupByString(field.Name)
+	collection, err := rootNode.LookupByString(field.Name)
 	if err != nil {
 		return nil, err
 	}
-	result := make([]any, 0, obj.Length())
-	iter := obj.MapIterator()
+	obj, err := collection.LookupByString(id)
+	if err != nil {
+		return nil, err
+	}
+	return e.queryField(ctx, obj, field)
+}
+
+func (e *executionContext) queryCollection(ctx context.Context, rootLink datamodel.Link, field graphql.CollectedField) (any, error) {
+	rootNode, err := e.store.Load(ctx, rootLink, e.system.Prototype(types.RootTypeName))
+	if err != nil {
+		return nil, err
+	}
+	collection, err := rootNode.LookupByString(field.Name)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]any, 0, collection.Length())
+	iter := collection.MapIterator()
 	for !iter.Done() {
 		_, v, err := iter.Next()
 		if err != nil {

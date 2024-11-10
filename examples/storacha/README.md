@@ -14,26 +14,24 @@ The results of the mutation should print out:
 
 ```json
 {
-    "createFilm": [
-        {
-            "_link": "bafyrgqb2jii3fv72wzo6nwuy5w6bx6hgvftpsmbbqg6tx3awbopmzbelmxol3erzz7v25bf7wxd6zsnuutbqtrtmeijeusnmvxor5xfdwd7ni",
-            "actors": [
-                {
-                    "_link": "bafyrgqfvjhyhccoqthft5saxamdjiykxxiis3wwqohztknbd23opg4daw2av77iwg2ktcfcsorr4wen6romcihzvpnwumk25hbat4vsfsbyak",
-                    "name": "Michael Keaton"
-                },
-                {
-                    "_link": "bafyrgqarwacdf5cchfbep7j54ofiv6j2pkp2luatpte5ot33yr2hygwf6jdh5zuxvmnbtivjtbfpm5mi3pxdzwx523hy6bolwk6cp2em53dy4",
-                    "name": "Winona Ryder"
-                }
-            ],
-            "director": {
-                "_link": "bafyrgqgjc3ltkkn7rqtw5dkwhcewce7qo5536i6jnw7kk7svlrtwfuwy3f7fx2j5ma2cacgggmnf6uszgib73j3kivbw5sultano237e7kyto",
-                "name": "Tim Burton"
+    "createFilm": {
+        "_link": "bafyrgqb2jii3fv72wzo6nwuy5w6bx6hgvftpsmbbqg6tx3awbopmzbelmxol3erzz7v25bf7wxd6zsnuutbqtrtmeijeusnmvxor5xfdwd7ni",
+        "actors": [
+            {
+                "_link": "bafyrgqfvjhyhccoqthft5saxamdjiykxxiis3wwqohztknbd23opg4daw2av77iwg2ktcfcsorr4wen6romcihzvpnwumk25hbat4vsfsbyak",
+                "name": "Michael Keaton"
             },
-            "title": "Beetlejuice"
-        }
-    ]
+            {
+                "_link": "bafyrgqarwacdf5cchfbep7j54ofiv6j2pkp2luatpte5ot33yr2hygwf6jdh5zuxvmnbtivjtbfpm5mi3pxdzwx523hy6bolwk6cp2em53dy4",
+                "name": "Winona Ryder"
+            }
+        ],
+        "director": {
+            "_link": "bafyrgqgjc3ltkkn7rqtw5dkwhcewce7qo5536i6jnw7kk7svlrtwfuwy3f7fx2j5ma2cacgggmnf6uszgib73j3kivbw5sultano237e7kyto",
+            "name": "Tim Burton"
+        },
+        "title": "Beetlejuice"
+    }
 }
 ```
 

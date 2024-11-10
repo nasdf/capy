@@ -11,10 +11,10 @@ import (
 	"github.com/nasdf/capy/core"
 	"github.com/nasdf/capy/graphql"
 
-	"github.com/BurntSushi/toml"
 	"github.com/ipld/go-ipld-prime/storage/memstore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 //go:embed cases/*
@@ -46,7 +46,7 @@ func TestAllCases(t *testing.T) {
 		require.NoError(t, err, "failed to read file: %s", path)
 
 		var testCase TestCase
-		err = toml.Unmarshal(data, &testCase)
+		err = yaml.Unmarshal(data, &testCase)
 		require.NoError(t, err, "failed to read file: %s", path)
 
 		t.Run(testCase.Description, func(st *testing.T) {
