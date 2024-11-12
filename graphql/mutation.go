@@ -24,18 +24,18 @@ func (e *executionContext) executeMutation(ctx context.Context, rootLink datamod
 		case strings.HasPrefix(field.Name, "create"):
 			val, lnk, err := e.createMutation(ctx, rootLink, field)
 			if err != nil {
-				return nil, gqlerror.List{gqlerror.Wrap(err)}
+				return nil, err
 			}
 			rootLink = lnk
 			out[field.Alias] = val
 
 		default:
-			return nil, gqlerror.List{gqlerror.Errorf("unsupported mutation %s", field.Name)}
+			return nil, gqlerror.Errorf("unsupported mutation %s", field.Name)
 		}
 	}
 	err := e.store.SetRootLink(ctx, rootLink)
 	if err != nil {
-		return nil, gqlerror.List{gqlerror.Wrap(err)}
+		return nil, gqlerror.Wrap(err)
 	}
 	return out, nil
 }
@@ -46,15 +46,15 @@ func (e *executionContext) createMutation(ctx context.Context, rootLink datamode
 
 	lnk, err := node.Build(ctx, e.store, e.system.Type(field.Name), args["data"])
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, gqlerror.ErrorPosf(field.Position, err.Error())
 	}
 	rootNode, err := e.store.Load(ctx, rootLink, e.system.Prototype(types.RootTypeName))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, gqlerror.ErrorPosf(field.Position, err.Error())
 	}
 	id, err := uuid.NewRandom()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, gqlerror.ErrorPosf(field.Position, err.Error())
 	}
 
 	path := datamodel.ParsePath(field.Name).AppendSegmentString(id.String())
@@ -62,14 +62,14 @@ func (e *executionContext) createMutation(ctx context.Context, rootLink datamode
 		return basicnode.NewLink(lnk), nil
 	}, true)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, gqlerror.ErrorPosf(field.Position, err.Error())
 	}
 
 	rootLink, err = e.store.Store(ctx, rootNode)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, gqlerror.ErrorPosf(field.Position, err.Error())
 	}
-	val, err := e.queryColletionByID(ctx, rootLink, field, id.String())
+	val, err := e.queryDocument(ctx, rootLink, field, id.String())
 	if err != nil {
 		return nil, nil, err
 	}

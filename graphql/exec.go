@@ -56,14 +56,19 @@ func Execute(ctx context.Context, system *types.System, store *core.Store, schem
 		params:   params,
 		rootLink: rootLink,
 	}
+	var data any
 	switch operation.Operation {
 	case ast.Mutation:
-		return exec.executeMutation(ctx, rootLink, operation.SelectionSet)
+		data, err = exec.executeMutation(ctx, rootLink, operation.SelectionSet)
 	case ast.Query:
-		return exec.executeQuery(ctx, rootLink, operation.SelectionSet)
+		data, err = exec.executeQuery(ctx, rootLink, operation.SelectionSet)
 	default:
-		return nil, gqlerror.List{gqlerror.Errorf("unsupported operation %s", operation.Operation)}
+		err = gqlerror.Errorf("unsupported operation %s", operation.Operation)
 	}
+	if err != nil {
+		return data, gqlerror.List{gqlerror.WrapIfUnwrapped(err)}
+	}
+	return data, nil
 }
 
 type executionContext struct {

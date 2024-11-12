@@ -2,7 +2,6 @@ package graphql
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/nasdf/capy/node"
 	"github.com/nasdf/capy/types"
@@ -28,7 +27,7 @@ func (e *executionContext) executeQuery(ctx context.Context, rootLink datamodel.
 		default:
 			res, err := e.queryCollection(ctx, rootLink, field)
 			if err != nil {
-				return nil, gqlerror.List{gqlerror.Wrap(err)}
+				return nil, err
 			}
 			result[field.Alias] = res
 		}
@@ -36,18 +35,18 @@ func (e *executionContext) executeQuery(ctx context.Context, rootLink datamodel.
 	return result, nil
 }
 
-func (e *executionContext) queryColletionByID(ctx context.Context, rootLink datamodel.Link, field graphql.CollectedField, id string) (any, error) {
+func (e *executionContext) queryDocument(ctx context.Context, rootLink datamodel.Link, field graphql.CollectedField, id string) (any, error) {
 	rootNode, err := e.store.Load(ctx, rootLink, e.system.Prototype(types.RootTypeName))
 	if err != nil {
 		return nil, err
 	}
 	collection, err := rootNode.LookupByString(field.Name)
 	if err != nil {
-		return nil, err
+		return nil, gqlerror.ErrorPosf(field.Position, err.Error())
 	}
 	obj, err := collection.LookupByString(id)
 	if err != nil {
-		return nil, err
+		return nil, gqlerror.ErrorPosf(field.Position, err.Error())
 	}
 	return e.queryField(ctx, obj, field)
 }
@@ -55,18 +54,18 @@ func (e *executionContext) queryColletionByID(ctx context.Context, rootLink data
 func (e *executionContext) queryCollection(ctx context.Context, rootLink datamodel.Link, field graphql.CollectedField) (any, error) {
 	rootNode, err := e.store.Load(ctx, rootLink, e.system.Prototype(types.RootTypeName))
 	if err != nil {
-		return nil, err
+		return nil, gqlerror.ErrorPosf(field.Position, err.Error())
 	}
 	collection, err := rootNode.LookupByString(field.Name)
 	if err != nil {
-		return nil, err
+		return nil, gqlerror.ErrorPosf(field.Position, err.Error())
 	}
 	result := make([]any, 0, collection.Length())
 	iter := collection.MapIterator()
 	for !iter.Done() {
 		_, v, err := iter.Next()
 		if err != nil {
-			return nil, err
+			return nil, gqlerror.ErrorPosf(field.Position, err.Error())
 		}
 		out, err := e.queryField(ctx, v, field)
 		if err != nil {
@@ -87,22 +86,22 @@ func (e *executionContext) queryField(ctx context.Context, n datamodel.Node, fie
 	case datamodel.Kind_List:
 		return e.queryList(ctx, n, field)
 	case datamodel.Kind_Map:
-		return e.queryMap(ctx, n, field.SelectionSet)
+		return e.queryMap(ctx, n, field)
 	case datamodel.Kind_Null:
 		return nil, nil
 	default:
-		return nil, fmt.Errorf("cannot traverse node of type %s", n.Kind().String())
+		return nil, gqlerror.ErrorPosf(field.Position, "cannot traverse node of type %s", n.Kind().String())
 	}
 }
 
 func (e *executionContext) queryLink(ctx context.Context, n datamodel.Node, field graphql.CollectedField) (any, error) {
 	lnk, err := n.AsLink()
 	if err != nil {
-		return nil, err
+		return nil, gqlerror.ErrorPosf(field.Position, err.Error())
 	}
 	obj, err := e.store.Load(ctx, lnk, node.Prototype(n))
 	if err != nil {
-		return nil, err
+		return nil, gqlerror.ErrorPosf(field.Position, err.Error())
 	}
 	ctx = context.WithValue(ctx, linkContextKey, lnk)
 	return e.queryField(ctx, obj, field)
@@ -114,7 +113,7 @@ func (e *executionContext) queryList(ctx context.Context, n datamodel.Node, fiel
 	for !iter.Done() {
 		_, obj, err := iter.Next()
 		if err != nil {
-			return nil, err
+			return nil, gqlerror.ErrorPosf(field.Position, err.Error())
 		}
 		val, err := e.queryField(ctx, obj, field)
 		if err != nil {
@@ -125,9 +124,9 @@ func (e *executionContext) queryList(ctx context.Context, n datamodel.Node, fiel
 	return result, nil
 }
 
-func (e *executionContext) queryMap(ctx context.Context, n datamodel.Node, set ast.SelectionSet) (any, error) {
+func (e *executionContext) queryMap(ctx context.Context, n datamodel.Node, field graphql.CollectedField) (any, error) {
 	result := make(map[string]any)
-	fields := e.collectFields(set)
+	fields := e.collectFields(field.SelectionSet)
 	for _, field := range fields {
 		switch field.Name {
 		case "_link":
@@ -137,7 +136,7 @@ func (e *executionContext) queryMap(ctx context.Context, n datamodel.Node, set a
 		default:
 			obj, err := n.LookupByString(field.Name)
 			if err != nil {
-				return nil, err
+				return nil, gqlerror.ErrorPosf(field.Position, err.Error())
 			}
 			val, err := e.queryField(ctx, obj, field)
 			if err != nil {
