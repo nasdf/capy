@@ -2,6 +2,7 @@ package graphql
 
 import (
 	"context"
+	"strings"
 
 	"github.com/nasdf/capy/node"
 	"github.com/nasdf/capy/types"
@@ -132,7 +133,8 @@ func (e *executionContext) queryMap(ctx context.Context, n datamodel.Node, field
 		case "_link":
 			result[field.Alias] = ctx.Value(linkContextKey).(datamodel.Link).String()
 		case "__typename":
-			result[field.Alias] = n.(schema.TypedNode).Type().Name()
+			typename := n.(schema.TypedNode).Type().Name()
+			result[field.Alias] = strings.TrimSuffix(typename, types.DocumentSuffix)
 		default:
 			obj, err := n.LookupByString(field.Name)
 			if err != nil {

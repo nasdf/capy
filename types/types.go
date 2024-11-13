@@ -2,7 +2,6 @@ package types
 
 import (
 	"fmt"
-	"slices"
 
 	"github.com/ipld/go-ipld-prime/schema"
 	"github.com/vektah/gqlparser/v2/ast"
@@ -12,6 +11,7 @@ const (
 	// RootTypeName is the name of the root struct type.
 	RootTypeName        = "__Root"
 	RootSchemaFieldName = "Schema"
+	DocumentSuffix      = "Document"
 	CollectionSuffix    = "Collection"
 )
 
@@ -35,24 +35,25 @@ func accumulate(s *ast.Schema, collections []string) *schema.TypeSystem {
 	ts := schema.MustTypeSystem(baseTypes...)
 	for _, d := range s.Types {
 		if !d.BuiltIn {
-			accumulateSchemaType(ts, d, collections)
+			accumulateSchemaType(ts, d)
 		}
 	}
 	rootFields := []schema.StructField{
 		schema.SpawnStructField(RootSchemaFieldName, "String", false, false),
 	}
 	for _, n := range collections {
-		ts.Accumulate(schema.SpawnMap(n+CollectionSuffix, "String", "&"+n, false))
-		rootFields = append(rootFields, schema.SpawnStructField(n, n+CollectionSuffix, false, false))
+		collectionType := schema.SpawnMap(n+CollectionSuffix, "String", n, false)
+		ts.Accumulate(collectionType)
+		rootFields = append(rootFields, schema.SpawnStructField(n, collectionType.Name(), false, false))
 	}
 	ts.Accumulate(schema.SpawnStruct(RootTypeName, rootFields, schema.SpawnStructRepresentationMap(nil)))
 	return ts
 }
 
-func accumulateSchemaType(ts *schema.TypeSystem, d *ast.Definition, collections []string) {
+func accumulateSchemaType(ts *schema.TypeSystem, d *ast.Definition) {
 	switch d.Kind {
 	case ast.Object:
-		accumulateSchemaStructType(ts, d, collections)
+		accumulateSchemaStructType(ts, d)
 	case ast.Enum:
 		accumulateSchemaEnumType(ts, d)
 	}
@@ -68,36 +69,21 @@ func accumulateSchemaEnumType(ts *schema.TypeSystem, d *ast.Definition) {
 	ts.Accumulate(schema.SpawnEnum(d.Name, members, repr))
 }
 
-func accumulateSchemaStructType(ts *schema.TypeSystem, d *ast.Definition, collections []string) {
+func accumulateSchemaStructType(ts *schema.TypeSystem, d *ast.Definition) {
 	fields := make([]schema.StructField, len(d.Fields))
 	for i, field := range d.Fields {
-		name := typeName(field.Type, collections)
 		if field.Type.Elem != nil {
-			fields[i] = schema.SpawnStructField(field.Name, name, !field.Type.Elem.NonNull, !field.Type.Elem.NonNull)
+			fields[i] = schema.SpawnStructField(field.Name, field.Type.String(), !field.Type.Elem.NonNull, !field.Type.Elem.NonNull)
 		} else {
-			fields[i] = schema.SpawnStructField(field.Name, name, !field.Type.NonNull, !field.Type.NonNull)
+			fields[i] = schema.SpawnStructField(field.Name, field.Type.String(), !field.Type.NonNull, !field.Type.NonNull)
 		}
 	}
-	// accumulate object types
-	ts.Accumulate(schema.SpawnStruct(d.Name, fields, schema.SpawnStructRepresentationMap(nil)))
-	ts.Accumulate(schema.SpawnList(fmt.Sprintf("[%s]", d.Name), d.Name, true))
-	ts.Accumulate(schema.SpawnList(fmt.Sprintf("[%s!]", d.Name), d.Name, false))
-	// accumulate reference types
-	ts.Accumulate(schema.SpawnLinkReference("&"+d.Name, d.Name))
-	ts.Accumulate(schema.SpawnList(fmt.Sprintf("[&%s]", d.Name), "&"+d.Name, true))
-	ts.Accumulate(schema.SpawnList(fmt.Sprintf("[&%s!]", d.Name), "&"+d.Name, false))
-}
+	structType := schema.SpawnStruct(d.Name+DocumentSuffix, fields, schema.SpawnStructRepresentationMap(nil))
+	ts.Accumulate(structType)
 
-func typeName(t *ast.Type, collections []string) string {
-	if t.Elem != nil {
-		return fmt.Sprintf("[%s]", typeName(t.Elem, collections))
-	}
-	name := t.NamedType
-	if slices.Contains(collections, name) {
-		name = "&" + name
-	}
-	if t.NonNull {
-		name = name + "!"
-	}
-	return name
+	linkType := schema.SpawnLinkReference(d.Name, structType.Name())
+	ts.Accumulate(linkType)
+
+	ts.Accumulate(schema.SpawnList(fmt.Sprintf("[%s]", d.Name), linkType.Name(), true))
+	ts.Accumulate(schema.SpawnList(fmt.Sprintf("[%s!]", d.Name), linkType.Name(), false))
 }

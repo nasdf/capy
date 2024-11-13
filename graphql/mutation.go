@@ -43,8 +43,9 @@ func (e *executionContext) executeMutation(ctx context.Context, rootLink datamod
 func (e *executionContext) createMutation(ctx context.Context, rootLink datamodel.Link, field graphql.CollectedField) (any, datamodel.Link, error) {
 	args := field.ArgumentMap(e.params.Variables)
 	field.Name = strings.TrimPrefix(field.Name, "create")
+	docType := e.system.Type(field.Name + types.DocumentSuffix)
 
-	lnk, err := node.Build(ctx, e.store, e.system.Type(field.Name), args["data"])
+	lnk, err := node.Build(ctx, e.store, docType, args["data"])
 	if err != nil {
 		return nil, nil, gqlerror.ErrorPosf(field.Position, err.Error())
 	}
@@ -56,7 +57,6 @@ func (e *executionContext) createMutation(ctx context.Context, rootLink datamode
 	if err != nil {
 		return nil, nil, gqlerror.ErrorPosf(field.Position, err.Error())
 	}
-
 	path := datamodel.ParsePath(field.Name).AppendSegmentString(id.String())
 	rootNode, err = e.store.Traversal(ctx).FocusedTransform(rootNode, path, func(p traversal.Progress, n datamodel.Node) (datamodel.Node, error) {
 		return basicnode.NewLink(lnk), nil
@@ -64,7 +64,6 @@ func (e *executionContext) createMutation(ctx context.Context, rootLink datamode
 	if err != nil {
 		return nil, nil, gqlerror.ErrorPosf(field.Position, err.Error())
 	}
-
 	rootLink, err = e.store.Store(ctx, rootNode)
 	if err != nil {
 		return nil, nil, gqlerror.ErrorPosf(field.Position, err.Error())
