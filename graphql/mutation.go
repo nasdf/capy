@@ -4,7 +4,6 @@ import (
 	"context"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/nasdf/capy/node"
 	"github.com/nasdf/capy/types"
 	"github.com/vektah/gqlparser/v2/ast"
@@ -42,10 +41,10 @@ func (e *executionContext) executeMutation(ctx context.Context, rootLink datamod
 
 func (e *executionContext) createMutation(ctx context.Context, rootLink datamodel.Link, field graphql.CollectedField) (any, datamodel.Link, error) {
 	args := field.ArgumentMap(e.params.Variables)
-	field.Name = strings.TrimPrefix(field.Name, "create")
-	docType := e.system.Type(field.Name + types.DocumentSuffix)
+	collection := strings.TrimPrefix(field.Name, "create")
+	builder := node.NewBuilder(e.store, e.system)
 
-	lnk, err := node.Build(ctx, e.store, docType, args["data"])
+	id, err := builder.Build(ctx, collection, args["data"])
 	if err != nil {
 		return nil, nil, gqlerror.ErrorPosf(field.Position, err.Error())
 	}
@@ -53,22 +52,25 @@ func (e *executionContext) createMutation(ctx context.Context, rootLink datamode
 	if err != nil {
 		return nil, nil, gqlerror.ErrorPosf(field.Position, err.Error())
 	}
-	id, err := uuid.NewRandom()
-	if err != nil {
-		return nil, nil, gqlerror.ErrorPosf(field.Position, err.Error())
+
+	for collection, documents := range builder.Links() {
+		for id, lnk := range documents {
+			rootPath := datamodel.ParsePath(collection).AppendSegmentString(id)
+			rootNode, err = e.store.Traversal(ctx).FocusedTransform(rootNode, rootPath, func(p traversal.Progress, n datamodel.Node) (datamodel.Node, error) {
+				return basicnode.NewLink(lnk), nil
+			}, true)
+			if err != nil {
+				return nil, nil, gqlerror.ErrorPosf(field.Position, err.Error())
+			}
+		}
 	}
-	path := datamodel.ParsePath(field.Name).AppendSegmentString(id.String())
-	rootNode, err = e.store.Traversal(ctx).FocusedTransform(rootNode, path, func(p traversal.Progress, n datamodel.Node) (datamodel.Node, error) {
-		return basicnode.NewLink(lnk), nil
-	}, true)
-	if err != nil {
-		return nil, nil, gqlerror.ErrorPosf(field.Position, err.Error())
-	}
+
 	rootLink, err = e.store.Store(ctx, rootNode)
 	if err != nil {
 		return nil, nil, gqlerror.ErrorPosf(field.Position, err.Error())
 	}
-	val, err := e.queryDocument(ctx, rootLink, field, id.String())
+	ctx = context.WithValue(ctx, rootContextKey, rootLink)
+	val, err := e.queryDocument(ctx, field, collection, id)
 	if err != nil {
 		return nil, nil, err
 	}

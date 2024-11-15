@@ -44,7 +44,7 @@ func MapValue(n datamodel.Node) (map[string]any, error) {
 		if err != nil {
 			return nil, err
 		}
-		key, err := Value(k)
+		key, err := k.AsString()
 		if err != nil {
 			return nil, err
 		}
@@ -52,7 +52,7 @@ func MapValue(n datamodel.Node) (map[string]any, error) {
 		if err != nil {
 			return nil, err
 		}
-		out[key.(string)] = val
+		out[key] = val
 	}
 	return out, nil
 }

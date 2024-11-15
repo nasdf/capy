@@ -2,7 +2,6 @@ package graphql
 
 import (
 	"context"
-	"strings"
 
 	"github.com/nasdf/capy/node"
 	"github.com/nasdf/capy/types"
@@ -26,7 +25,8 @@ func (e *executionContext) executeQuery(ctx context.Context, rootLink datamodel.
 		case "__schema":
 			result[field.Alias] = e.introspectQuerySchema(field)
 		default:
-			res, err := e.queryCollection(ctx, rootLink, field)
+			ctx = context.WithValue(ctx, rootContextKey, rootLink)
+			res, err := e.queryCollection(ctx, field)
 			if err != nil {
 				return nil, err
 			}
@@ -36,23 +36,25 @@ func (e *executionContext) executeQuery(ctx context.Context, rootLink datamodel.
 	return result, nil
 }
 
-func (e *executionContext) queryDocument(ctx context.Context, rootLink datamodel.Link, field graphql.CollectedField, id string) (any, error) {
+func (e *executionContext) queryDocument(ctx context.Context, field graphql.CollectedField, collection string, id string) (any, error) {
+	rootLink := ctx.Value(rootContextKey).(datamodel.Link)
 	rootNode, err := e.store.Load(ctx, rootLink, e.system.Prototype(types.RootTypeName))
 	if err != nil {
 		return nil, err
 	}
-	collection, err := rootNode.LookupByString(field.Name)
+	col, err := rootNode.LookupByString(collection)
 	if err != nil {
 		return nil, gqlerror.ErrorPosf(field.Position, err.Error())
 	}
-	obj, err := collection.LookupByString(id)
+	obj, err := col.LookupByString(id)
 	if err != nil {
 		return nil, gqlerror.ErrorPosf(field.Position, err.Error())
 	}
-	return e.queryField(ctx, obj, field)
+	return e.queryField(ctx, obj.(schema.TypedNode), field)
 }
 
-func (e *executionContext) queryCollection(ctx context.Context, rootLink datamodel.Link, field graphql.CollectedField) (any, error) {
+func (e *executionContext) queryCollection(ctx context.Context, field graphql.CollectedField) (any, error) {
+	rootLink := ctx.Value(rootContextKey).(datamodel.Link)
 	rootNode, err := e.store.Load(ctx, rootLink, e.system.Prototype(types.RootTypeName))
 	if err != nil {
 		return nil, gqlerror.ErrorPosf(field.Position, err.Error())
@@ -68,7 +70,7 @@ func (e *executionContext) queryCollection(ctx context.Context, rootLink datamod
 		if err != nil {
 			return nil, gqlerror.ErrorPosf(field.Position, err.Error())
 		}
-		out, err := e.queryField(ctx, v, field)
+		out, err := e.queryField(ctx, v.(schema.TypedNode), field)
 		if err != nil {
 			return nil, err
 		}
@@ -77,9 +79,17 @@ func (e *executionContext) queryCollection(ctx context.Context, rootLink datamod
 	return result, nil
 }
 
-func (e *executionContext) queryField(ctx context.Context, n datamodel.Node, field graphql.CollectedField) (any, error) {
+func (e *executionContext) queryField(ctx context.Context, n schema.TypedNode, field graphql.CollectedField) (any, error) {
 	if len(field.SelectionSet) == 0 {
 		return node.Value(n)
+	}
+	// check if the node is a document id
+	if collection, ok := node.IsDocumentID(n.Type()); ok {
+		id, err := n.AsString()
+		if err != nil {
+			return nil, err
+		}
+		return e.queryDocument(ctx, field, collection, id)
 	}
 	switch n.Kind() {
 	case datamodel.Kind_Link:
@@ -95,7 +105,7 @@ func (e *executionContext) queryField(ctx context.Context, n datamodel.Node, fie
 	}
 }
 
-func (e *executionContext) queryLink(ctx context.Context, n datamodel.Node, field graphql.CollectedField) (any, error) {
+func (e *executionContext) queryLink(ctx context.Context, n schema.TypedNode, field graphql.CollectedField) (any, error) {
 	lnk, err := n.AsLink()
 	if err != nil {
 		return nil, gqlerror.ErrorPosf(field.Position, err.Error())
@@ -105,10 +115,10 @@ func (e *executionContext) queryLink(ctx context.Context, n datamodel.Node, fiel
 		return nil, gqlerror.ErrorPosf(field.Position, err.Error())
 	}
 	ctx = context.WithValue(ctx, linkContextKey, lnk)
-	return e.queryField(ctx, obj, field)
+	return e.queryField(ctx, obj.(schema.TypedNode), field)
 }
 
-func (e *executionContext) queryList(ctx context.Context, n datamodel.Node, field graphql.CollectedField) ([]any, error) {
+func (e *executionContext) queryList(ctx context.Context, n schema.TypedNode, field graphql.CollectedField) ([]any, error) {
 	result := make([]any, 0, n.Length())
 	iter := n.ListIterator()
 	for !iter.Done() {
@@ -116,7 +126,7 @@ func (e *executionContext) queryList(ctx context.Context, n datamodel.Node, fiel
 		if err != nil {
 			return nil, gqlerror.ErrorPosf(field.Position, err.Error())
 		}
-		val, err := e.queryField(ctx, obj, field)
+		val, err := e.queryField(ctx, obj.(schema.TypedNode), field)
 		if err != nil {
 			return nil, err
 		}
@@ -125,7 +135,7 @@ func (e *executionContext) queryList(ctx context.Context, n datamodel.Node, fiel
 	return result, nil
 }
 
-func (e *executionContext) queryMap(ctx context.Context, n datamodel.Node, field graphql.CollectedField) (any, error) {
+func (e *executionContext) queryMap(ctx context.Context, n schema.TypedNode, field graphql.CollectedField) (any, error) {
 	result := make(map[string]any)
 	fields := e.collectFields(field.SelectionSet)
 	for _, field := range fields {
@@ -133,14 +143,13 @@ func (e *executionContext) queryMap(ctx context.Context, n datamodel.Node, field
 		case "_link":
 			result[field.Alias] = ctx.Value(linkContextKey).(datamodel.Link).String()
 		case "__typename":
-			typename := n.(schema.TypedNode).Type().Name()
-			result[field.Alias] = strings.TrimSuffix(typename, types.DocumentSuffix)
+			result[field.Alias] = n.(schema.TypedNode).Type().Name()
 		default:
 			obj, err := n.LookupByString(field.Name)
 			if err != nil {
 				return nil, gqlerror.ErrorPosf(field.Position, err.Error())
 			}
-			val, err := e.queryField(ctx, obj, field)
+			val, err := e.queryField(ctx, obj.(schema.TypedNode), field)
 			if err != nil {
 				return nil, err
 			}
