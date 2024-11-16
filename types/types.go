@@ -9,11 +9,32 @@ import (
 
 const (
 	RootTypeName        = "__Root"
-	RootSchemaFieldName = "Schema"
-	LinkSuffix          = "Link"
-	DocumentSuffix      = "+Document"
-	CollectionSuffix    = "+Collection"
+	RootParentsTypeName = "__RootParents"
+	RootLinkTypeName    = "__RootLink"
+
+	RootSchemaFieldName  = "Schema"
+	RootParentsFieldName = "Parents"
+
+	LinkSuffix       = "Link"
+	DocumentSuffix   = "+Document"
+	CollectionSuffix = "+Collection"
 )
+
+var baseTypes = []schema.Type{
+	TypeID,
+	TypeInt,
+	TypeFloat,
+	TypeBoolean,
+	TypeString,
+	TypeIntList,
+	TypeNotNullIntList,
+	TypeFloatList,
+	TypeNotNullFloatList,
+	TypeBooleanList,
+	TypeNotNullBooleanList,
+	TypeStringList,
+	TypeNotNullStringList,
+}
 
 var (
 	TypeID                 = schema.SpawnString("ID")
@@ -31,29 +52,11 @@ var (
 	TypeNotNullStringList  = schema.SpawnList("[String!]", TypeString.Name(), false)
 )
 
-func defaultTypeSystem() *schema.TypeSystem {
-	return schema.MustTypeSystem(
-		TypeID,
-		TypeInt,
-		TypeFloat,
-		TypeBoolean,
-		TypeString,
-		TypeIntList,
-		TypeNotNullIntList,
-		TypeFloatList,
-		TypeNotNullFloatList,
-		TypeBooleanList,
-		TypeNotNullBooleanList,
-		TypeStringList,
-		TypeNotNullStringList,
-	)
-}
+func schemaTypeSystem(s *ast.Schema) (*schema.TypeSystem, []error) {
+	types := make([]schema.Type, len(baseTypes))
+	copy(types, baseTypes)
 
-func schemaTypeSystem(s *ast.Schema) *schema.TypeSystem {
-	rootFields := []schema.StructField{
-		schema.SpawnStructField(RootSchemaFieldName, "String", false, false),
-	}
-	ts := defaultTypeSystem()
+	var rootFields []schema.StructField
 	for _, d := range s.Types {
 		if d.BuiltIn {
 			continue
@@ -70,19 +73,19 @@ func schemaTypeSystem(s *ast.Schema) *schema.TypeSystem {
 				}
 				fields[i] = schema.SpawnStructField(f.Name, fieldType, !f.Type.NonNull, !f.Type.NonNull)
 			}
-			ts.Accumulate(schema.SpawnStruct(d.Name+DocumentSuffix, fields, schema.SpawnStructRepresentationMap(nil)))
+			types = append(types, schema.SpawnStruct(d.Name+DocumentSuffix, fields, schema.SpawnStructRepresentationMap(nil)))
 
 			relationType := schema.SpawnString(d.Name)
-			ts.Accumulate(relationType)
+			types = append(types, relationType)
 
 			linkType := schema.SpawnLinkReference(d.Name+LinkSuffix, d.Name+DocumentSuffix)
-			ts.Accumulate(linkType)
+			types = append(types, linkType)
 
 			collectionType := schema.SpawnMap(d.Name+CollectionSuffix, "String", linkType.Name(), false)
-			ts.Accumulate(collectionType)
+			types = append(types, collectionType)
 
-			ts.Accumulate(schema.SpawnList(fmt.Sprintf("[%s]", relationType.Name()), relationType.Name(), true))
-			ts.Accumulate(schema.SpawnList(fmt.Sprintf("[%s!]", relationType.Name()), relationType.Name(), false))
+			types = append(types, schema.SpawnList(fmt.Sprintf("[%s]", relationType.Name()), relationType.Name(), true))
+			types = append(types, schema.SpawnList(fmt.Sprintf("[%s!]", relationType.Name()), relationType.Name(), false))
 
 			rootFields = append(rootFields, schema.SpawnStructField(d.Name, collectionType.Name(), false, false))
 
@@ -93,9 +96,18 @@ func schemaTypeSystem(s *ast.Schema) *schema.TypeSystem {
 				members[i] = v.Name
 				repr[v.Name] = v.Name
 			}
-			ts.Accumulate(schema.SpawnEnum(d.Name, members, repr))
+			types = append(types, schema.SpawnEnum(d.Name, members, repr))
 		}
 	}
-	ts.Accumulate(schema.SpawnStruct(RootTypeName, rootFields, schema.SpawnStructRepresentationMap(nil)))
-	return ts
+	rootLinkType := schema.SpawnLinkReference(RootLinkTypeName, RootTypeName)
+	types = append(types, rootLinkType)
+
+	rootParentsType := schema.SpawnList(RootParentsTypeName, rootLinkType.Name(), false)
+	types = append(types, rootParentsType)
+
+	rootFields = append(rootFields, schema.SpawnStructField(RootParentsFieldName, rootParentsType.Name(), false, false))
+	rootFields = append(rootFields, schema.SpawnStructField(RootSchemaFieldName, TypeString.Name(), false, false))
+	types = append(types, schema.SpawnStruct(RootTypeName, rootFields, schema.SpawnStructRepresentationMap(nil)))
+
+	return schema.SpawnTypeSystem(types...)
 }

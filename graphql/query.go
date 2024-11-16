@@ -14,7 +14,7 @@ import (
 	"github.com/vektah/gqlparser/v2/gqlerror"
 )
 
-func (e *executionContext) executeQuery(ctx context.Context, rootLink datamodel.Link, set ast.SelectionSet) (map[string]any, error) {
+func (e *executionContext) executeQuery(ctx context.Context, set ast.SelectionSet) (map[string]any, error) {
 	fields := e.collectFields(set, "Query")
 	result := make(map[string]any)
 	for _, field := range fields {
@@ -26,7 +26,6 @@ func (e *executionContext) executeQuery(ctx context.Context, rootLink datamodel.
 		case "__schema":
 			result[field.Alias] = e.introspectQuerySchema(field)
 		default:
-			ctx = context.WithValue(ctx, rootContextKey, rootLink)
 			res, err := e.queryCollection(ctx, field)
 			if err != nil {
 				return nil, err

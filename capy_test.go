@@ -25,7 +25,7 @@ func TestCapy(t *testing.T) {
 		require.NoError(t, err, "failed to load test case %s", path)
 
 		t.Run(path, func(st *testing.T) {
-			st.Parallel()
+			// TODO st.Parallel() when tests start taking too long
 
 			ctx := context.Background()
 			store := core.Open(storage.NewMemory())

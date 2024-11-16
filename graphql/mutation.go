@@ -14,13 +14,18 @@ import (
 	"github.com/ipld/go-ipld-prime/node/basicnode"
 )
 
-func (e *executionContext) executeMutation(ctx context.Context, rootLink datamodel.Link, set ast.SelectionSet) (map[string]any, error) {
+const createMutationPrefix = "create"
+
+func (e *executionContext) executeMutation(ctx context.Context, set ast.SelectionSet) (map[string]any, error) {
 	fields := e.collectFields(set, "Mutation")
 	out := make(map[string]any)
+	rootLink := ctx.Value(rootContextKey).(datamodel.Link)
+
 	for _, field := range fields {
 		switch {
-		case strings.HasPrefix(field.Name, "create"):
-			val, lnk, err := e.createMutation(ctx, rootLink, field)
+		case strings.HasPrefix(field.Name, createMutationPrefix):
+			collection := strings.TrimPrefix(field.Name, createMutationPrefix)
+			val, lnk, err := e.createMutation(ctx, field, collection)
 			if err != nil {
 				return nil, err
 			}
@@ -31,6 +36,7 @@ func (e *executionContext) executeMutation(ctx context.Context, rootLink datamod
 			return nil, gqlerror.Errorf("unsupported mutation %s", field.Name)
 		}
 	}
+
 	err := e.store.SetRootLink(ctx, rootLink)
 	if err != nil {
 		return nil, gqlerror.Wrap(err)
@@ -38,10 +44,10 @@ func (e *executionContext) executeMutation(ctx context.Context, rootLink datamod
 	return out, nil
 }
 
-func (e *executionContext) createMutation(ctx context.Context, rootLink datamodel.Link, field graphql.CollectedField) (any, datamodel.Link, error) {
+func (e *executionContext) createMutation(ctx context.Context, field graphql.CollectedField, collection string) (any, datamodel.Link, error) {
 	args := field.ArgumentMap(e.params.Variables)
-	collection := strings.TrimPrefix(field.Name, "create")
 	builder := node.NewBuilder(e.store, e.system)
+	rootLink := ctx.Value(rootContextKey).(datamodel.Link)
 
 	id, err := builder.Build(ctx, collection, args["data"])
 	if err != nil {
@@ -62,10 +68,16 @@ func (e *executionContext) createMutation(ctx context.Context, rootLink datamode
 		}
 	}
 
+	rootPath := datamodel.ParsePath(types.RootParentsFieldName).AppendSegmentString("-")
+	rootNode, err = e.store.SetNode(ctx, rootPath, rootNode, basicnode.NewLink(rootLink))
+	if err != nil {
+		return nil, nil, gqlerror.ErrorPosf(field.Position, err.Error())
+	}
 	rootLink, err = e.store.Store(ctx, rootNode)
 	if err != nil {
 		return nil, nil, gqlerror.ErrorPosf(field.Position, err.Error())
 	}
+
 	ctx = context.WithValue(ctx, rootContextKey, rootLink)
 	val, err := e.queryDocument(ctx, field, collection, id)
 	if err != nil {

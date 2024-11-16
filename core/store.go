@@ -43,7 +43,7 @@ func (s *Store) RootLink(ctx context.Context) (datamodel.Link, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &cidlink.Link{Cid: id}, nil
+	return cidlink.Link{Cid: id}, nil
 }
 
 // SetRootLink sets the store root link to the given link value.

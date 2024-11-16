@@ -21,9 +21,13 @@ func NewSystem(schema string) (*System, error) {
 	if err != nil {
 		return nil, err
 	}
-	system := schemaTypeSystem(s)
-	if err := system.ValidateGraph(); len(err) > 0 {
-		return nil, errors.Join(err...)
+	system, errs := schemaTypeSystem(s)
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
+	}
+	errs = system.ValidateGraph()
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
 	}
 	return &System{
 		schema: schema,
