@@ -1,9 +1,11 @@
 package capy
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"testing"
+	"text/template"
 
 	"github.com/nasdf/capy/core"
 	"github.com/nasdf/capy/graphql"
@@ -41,7 +43,14 @@ func TestCapy(t *testing.T) {
 				expected, err := json.Marshal(op.Response)
 				require.NoError(st, err)
 
-				assert.JSONEq(st, string(expected), string(actual))
+				tpl, err := template.New("response").Parse(string(expected))
+				require.NoError(st, err)
+
+				var out bytes.Buffer
+				err = tpl.Execute(&out, data)
+				require.NoError(st, err)
+
+				assert.JSONEq(st, out.String(), string(actual))
 			}
 		})
 	}

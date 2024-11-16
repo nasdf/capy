@@ -1,0 +1,17 @@
+# This test ensures that ids work as expected
+schema: |
+  type Record {
+    value: Int
+  }
+operations:
+  - params:
+      query: |
+        mutation {
+          createRecord(data: {value: 10}) {
+            _id
+          }
+        }
+    response:
+      data:
+        createRecord:
+          _id: "{{ .createRecord._id }}"

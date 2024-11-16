@@ -16,6 +16,7 @@ import (
 type contextKey string
 
 var (
+	idContextKey   = contextKey("id")
 	rootContextKey = contextKey("root")
 	linkContextKey = contextKey("link")
 )

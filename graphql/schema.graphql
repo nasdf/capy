@@ -7,6 +7,10 @@ extend type {{$name}} {
     The content address of this document.
     """
     _link: String!
+    """
+    The unique identifier of this document.
+    """
+    _id: ID!
 }
 
 """

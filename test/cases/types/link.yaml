@@ -1,0 +1,17 @@
+# This test ensures that links work as expected
+schema: |
+  type Record {
+    value: Int
+  }
+operations:
+  - params:
+      query: |
+        mutation {
+          createRecord(data: {value: 10}) {
+            _link
+          }
+        }
+    response:
+      data:
+        createRecord:
+          _link: "{{ .createRecord._link }}"

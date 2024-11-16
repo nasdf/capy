@@ -41,14 +41,18 @@ func (e *executionContext) queryDocument(ctx context.Context, field graphql.Coll
 	rootLink := ctx.Value(rootContextKey).(datamodel.Link)
 	rootNode, err := e.store.Load(ctx, rootLink, e.system.Prototype(types.RootTypeName))
 	if err != nil {
-		return nil, err
+		return nil, gqlerror.ErrorPosf(field.Position, err.Error())
 	}
-	docPath := datamodel.ParsePath(collection).AppendSegmentString(id)
-	docNode, err := e.store.GetNode(ctx, docPath, rootNode)
+	collectionNode, err := rootNode.LookupByString(collection)
 	if err != nil {
 		return nil, gqlerror.ErrorPosf(field.Position, err.Error())
 	}
-	return e.queryField(ctx, docNode.(schema.TypedNode), field)
+	linkNode, err := collectionNode.LookupByString(id)
+	if err != nil {
+		return nil, gqlerror.ErrorPosf(field.Position, err.Error())
+	}
+	ctx = context.WithValue(ctx, idContextKey, id)
+	return e.queryField(ctx, linkNode.(schema.TypedNode), field)
 }
 
 func (e *executionContext) queryCollection(ctx context.Context, field graphql.CollectedField) (any, error) {
@@ -64,10 +68,15 @@ func (e *executionContext) queryCollection(ctx context.Context, field graphql.Co
 	result := make([]any, 0, collection.Length())
 	iter := collection.MapIterator()
 	for !iter.Done() {
-		_, v, err := iter.Next()
+		k, v, err := iter.Next()
 		if err != nil {
 			return nil, gqlerror.ErrorPosf(field.Position, err.Error())
 		}
+		id, err := k.AsString()
+		if err != nil {
+			return nil, gqlerror.ErrorPosf(field.Position, err.Error())
+		}
+		ctx = context.WithValue(ctx, idContextKey, id)
 		out, err := e.queryField(ctx, v.(schema.TypedNode), field)
 		if err != nil {
 			return nil, err
@@ -78,24 +87,22 @@ func (e *executionContext) queryCollection(ctx context.Context, field graphql.Co
 }
 
 func (e *executionContext) queryField(ctx context.Context, n schema.TypedNode, field graphql.CollectedField) (any, error) {
-	if len(field.SelectionSet) == 0 {
+	switch {
+	case len(field.SelectionSet) == 0:
 		return node.Value(n)
-	}
-	if e.system.IsRelation(n.Type()) {
+	case e.system.IsRelation(n.Type()):
 		id, err := n.AsString()
 		if err != nil {
 			return nil, err
 		}
 		return e.queryDocument(ctx, field, n.Type().Name(), id)
-	}
-	switch n.Kind() {
-	case datamodel.Kind_Link:
+	case n.Kind() == datamodel.Kind_Link:
 		return e.queryLink(ctx, n, field)
-	case datamodel.Kind_List:
+	case n.Kind() == datamodel.Kind_List:
 		return e.queryList(ctx, n, field)
-	case datamodel.Kind_Map:
+	case n.Kind() == datamodel.Kind_Map:
 		return e.queryMap(ctx, n, field)
-	case datamodel.Kind_Null:
+	case n.Kind() == datamodel.Kind_Null:
 		return nil, nil
 	default:
 		return nil, gqlerror.ErrorPosf(field.Position, "cannot traverse node of type %s", n.Kind().String())
@@ -111,7 +118,7 @@ func (e *executionContext) queryLink(ctx context.Context, n schema.TypedNode, fi
 	if err != nil {
 		return nil, gqlerror.ErrorPosf(field.Position, err.Error())
 	}
-	ctx = context.WithValue(ctx, linkContextKey, lnk)
+	ctx = context.WithValue(ctx, linkContextKey, lnk.String())
 	return e.queryField(ctx, obj.(schema.TypedNode), field)
 }
 
@@ -138,9 +145,11 @@ func (e *executionContext) queryMap(ctx context.Context, n schema.TypedNode, fie
 	for _, field := range fields {
 		switch field.Name {
 		case "_link":
-			result[field.Alias] = ctx.Value(linkContextKey).(datamodel.Link).String()
+			result[field.Alias] = ctx.Value(linkContextKey).(string)
 		case "__typename":
 			result[field.Alias] = strings.TrimSuffix(n.Type().Name(), types.DocumentSuffix)
+		case "_id":
+			result[field.Alias] = ctx.Value(idContextKey).(string)
 		default:
 			obj, err := n.LookupByString(field.Name)
 			if err != nil {

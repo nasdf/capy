@@ -21,7 +21,7 @@ func NewSystem(schema string) (*System, error) {
 	if err != nil {
 		return nil, err
 	}
-	system := accumulate(s)
+	system := schemaTypeSystem(s)
 	if err := system.ValidateGraph(); len(err) > 0 {
 		return nil, errors.Join(err...)
 	}
