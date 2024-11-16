@@ -8,6 +8,7 @@ import (
 	"github.com/ipld/go-ipld-prime/linking"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
+	"github.com/ipld/go-ipld-prime/node/bindnode"
 	"github.com/ipld/go-ipld-prime/schema"
 	"github.com/ipld/go-ipld-prime/traversal"
 
@@ -24,10 +25,15 @@ var defaultLinkPrototype = cidlink.LinkPrototype{Prefix: cid.Prefix{
 }}
 
 var defaultNodePrototypeChooser = traversal.LinkTargetNodePrototypeChooser(func(l datamodel.Link, lc linking.LinkContext) (datamodel.NodePrototype, error) {
-	if t, ok := l.(schema.TypedLinkNode); ok {
-		return t.LinkTargetNodePrototype(), nil
+	tn, ok := lc.LinkNode.(schema.TypedNode)
+	if !ok {
+		return basicnode.Prototype.Any, nil
 	}
-	return basicnode.Prototype.Any, nil
+	lnk, ok := tn.Type().(*schema.TypeLink)
+	if ok && lnk.HasReferencedType() {
+		return bindnode.Prototype(nil, lnk.ReferencedType()), nil
+	}
+	return bindnode.Prototype(nil, tn.Type()), nil
 })
 
 func defaultTraversalConfig(ctx context.Context, linkSys linking.LinkSystem) *traversal.Config {

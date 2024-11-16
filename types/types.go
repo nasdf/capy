@@ -11,8 +11,8 @@ const (
 	RootTypeName        = "__Root"
 	RootSchemaFieldName = "Schema"
 	LinkSuffix          = "Link"
-	IDSuffix            = ":ID"
-	CollectionSuffix    = ":Collection"
+	DocumentSuffix      = "+Document"
+	CollectionSuffix    = "+Collection"
 )
 
 var (
@@ -45,24 +45,29 @@ var baseTypes = []schema.Type{
 	TypeNotNullStringList,
 }
 
-func accumulate(s *ast.Schema, collections []string) *schema.TypeSystem {
+func accumulate(s *ast.Schema) *schema.TypeSystem {
 	ts := schema.MustTypeSystem(baseTypes...)
+	collections := make([]string, 0)
 	for _, d := range s.Types {
-		if !d.BuiltIn {
-			accumulateType(s, d, ts)
+		if d.BuiltIn {
+			continue
 		}
+		if d.Kind == ast.Object {
+			collections = append(collections, d.Name)
+		}
+		accumulateType(d, ts)
 	}
 	rootFields := []schema.StructField{
 		schema.SpawnStructField(RootSchemaFieldName, "String", false, false),
 	}
 	for _, n := range collections {
-		idType := schema.SpawnString(n + IDSuffix)
-		ts.Accumulate(idType)
+		referenceType := schema.SpawnString(n)
+		ts.Accumulate(referenceType)
 
-		ts.Accumulate(schema.SpawnList(fmt.Sprintf("[%s]", idType.Name()), idType.Name(), true))
-		ts.Accumulate(schema.SpawnList(fmt.Sprintf("[%s!]", idType.Name()), idType.Name(), false))
+		ts.Accumulate(schema.SpawnList(fmt.Sprintf("[%s]", referenceType.Name()), referenceType.Name(), true))
+		ts.Accumulate(schema.SpawnList(fmt.Sprintf("[%s!]", referenceType.Name()), referenceType.Name(), false))
 
-		linkType := schema.SpawnLinkReference(n+LinkSuffix, n)
+		linkType := schema.SpawnLinkReference(n+LinkSuffix, n+DocumentSuffix)
 		ts.Accumulate(linkType)
 
 		collectionType := schema.SpawnMap(n+CollectionSuffix, "String", linkType.Name(), false)
@@ -74,14 +79,14 @@ func accumulate(s *ast.Schema, collections []string) *schema.TypeSystem {
 	return ts
 }
 
-func accumulateType(s *ast.Schema, d *ast.Definition, ts *schema.TypeSystem) {
+func accumulateType(d *ast.Definition, ts *schema.TypeSystem) {
 	switch d.Kind {
 	case ast.Object:
 		fields := make([]schema.StructField, len(d.Fields))
 		for i, f := range d.Fields {
-			fields[i] = schema.SpawnStructField(f.Name, fieldType(f.Type, s), !f.Type.NonNull, !f.Type.NonNull)
+			fields[i] = schema.SpawnStructField(f.Name, f.Type.String(), !f.Type.NonNull, !f.Type.NonNull)
 		}
-		ts.Accumulate(schema.SpawnStruct(d.Name, fields, schema.SpawnStructRepresentationMap(nil)))
+		ts.Accumulate(schema.SpawnStruct(d.Name+DocumentSuffix, fields, schema.SpawnStructRepresentationMap(nil)))
 
 	case ast.Enum:
 		members := make([]string, len(d.EnumValues))
@@ -92,18 +97,4 @@ func accumulateType(s *ast.Schema, d *ast.Definition, ts *schema.TypeSystem) {
 		}
 		ts.Accumulate(schema.SpawnEnum(d.Name, members, repr))
 	}
-}
-
-func fieldType(t *ast.Type, s *ast.Schema) string {
-	if t.Elem != nil {
-		return "[" + fieldType(t.Elem, s) + "]"
-	}
-	typ := t.NamedType
-	if s.Types[typ].Kind == ast.Object {
-		typ = typ + IDSuffix
-	}
-	if t.NonNull {
-		typ = typ + "!"
-	}
-	return typ
 }

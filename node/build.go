@@ -3,7 +3,6 @@ package node
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/nasdf/capy/core"
 	"github.com/nasdf/capy/types"
@@ -16,24 +15,11 @@ import (
 	"github.com/ipld/go-ipld-prime/schema"
 )
 
-// GenerateIdFunc is used to generate unique IDs for documents.
-type GenerateIdFunc = func() (string, error)
-
-// defaultGenerateIdFunc is used to generate Ids when none is provided.
-var defaultGenerateIdFunc = func() (string, error) {
-	id, err := uuid.NewRandom()
-	if err != nil {
-		return "", err
-	}
-	return id.String(), nil
-}
-
 // Builder assembles nodes from go input values.
 type Builder struct {
 	store  *core.Store
 	system *types.System
 	links  map[string]map[string]datamodel.Link
-	genId  GenerateIdFunc
 }
 
 // NewBuilder returns a new builder that uses the given type system to create nodes.
@@ -42,7 +28,6 @@ func NewBuilder(store *core.Store, system *types.System) *Builder {
 		store:  store,
 		system: system,
 		links:  make(map[string]map[string]datamodel.Link),
-		genId:  defaultGenerateIdFunc,
 	}
 }
 
@@ -53,12 +38,12 @@ func (b *Builder) Links() map[string]map[string]datamodel.Link {
 
 // Build creates a new node using the provided collection type and value returning its unique ID.
 func (b *Builder) Build(ctx context.Context, collection string, value any) (string, error) {
-	nt := b.system.Type(collection)
+	nt := b.system.Type(collection + types.DocumentSuffix)
 	nb := bindnode.Prototype(nil, nt).NewBuilder()
 	if err := b.assignValue(ctx, nt, value, nb); err != nil {
 		return "", err
 	}
-	id, err := b.genId()
+	id, err := uuid.NewRandom()
 	if err != nil {
 		return "", err
 	}
@@ -69,13 +54,12 @@ func (b *Builder) Build(ctx context.Context, collection string, value any) (stri
 	if _, ok := b.links[collection]; !ok {
 		b.links[collection] = make(map[string]datamodel.Link)
 	}
-	b.links[collection][id] = lnk
-	return id, nil
+	b.links[collection][id.String()] = lnk
+	return id.String(), nil
 }
 
 func (b *Builder) assignValue(ctx context.Context, t schema.Type, value any, na datamodel.NodeAssembler) error {
-	// check if the type is a document id
-	if _, ok := IsDocumentID(t); ok {
+	if b.system.IsRelation(t) {
 		return b.assignReference(ctx, t, value, na)
 	}
 	switch v := t.(type) {
@@ -111,8 +95,7 @@ func (b *Builder) assignLink(value string, na datamodel.NodeAssembler) error {
 }
 
 func (b *Builder) assignReference(ctx context.Context, t schema.Type, value any, na datamodel.NodeAssembler) error {
-	collection := strings.TrimSuffix(t.Name(), types.IDSuffix)
-	id, err := b.Build(ctx, collection, value)
+	id, err := b.Build(ctx, t.Name(), value)
 	if err != nil {
 		return err
 	}

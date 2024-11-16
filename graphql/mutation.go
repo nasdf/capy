@@ -12,7 +12,6 @@ import (
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
-	"github.com/ipld/go-ipld-prime/traversal"
 )
 
 func (e *executionContext) executeMutation(ctx context.Context, rootLink datamodel.Link, set ast.SelectionSet) (map[string]any, error) {
@@ -56,9 +55,7 @@ func (e *executionContext) createMutation(ctx context.Context, rootLink datamode
 	for collection, documents := range builder.Links() {
 		for id, lnk := range documents {
 			rootPath := datamodel.ParsePath(collection).AppendSegmentString(id)
-			rootNode, err = e.store.Traversal(ctx).FocusedTransform(rootNode, rootPath, func(p traversal.Progress, n datamodel.Node) (datamodel.Node, error) {
-				return basicnode.NewLink(lnk), nil
-			}, true)
+			rootNode, err = e.store.SetNode(ctx, rootPath, rootNode, basicnode.NewLink(lnk))
 			if err != nil {
 				return nil, nil, gqlerror.ErrorPosf(field.Position, err.Error())
 			}

@@ -2,6 +2,7 @@ package graphql
 
 import (
 	"context"
+	"strings"
 
 	"github.com/nasdf/capy/node"
 	"github.com/nasdf/capy/types"
@@ -42,15 +43,12 @@ func (e *executionContext) queryDocument(ctx context.Context, field graphql.Coll
 	if err != nil {
 		return nil, err
 	}
-	col, err := rootNode.LookupByString(collection)
+	docPath := datamodel.ParsePath(collection).AppendSegmentString(id)
+	docNode, err := e.store.GetNode(ctx, docPath, rootNode)
 	if err != nil {
 		return nil, gqlerror.ErrorPosf(field.Position, err.Error())
 	}
-	obj, err := col.LookupByString(id)
-	if err != nil {
-		return nil, gqlerror.ErrorPosf(field.Position, err.Error())
-	}
-	return e.queryField(ctx, obj.(schema.TypedNode), field)
+	return e.queryField(ctx, docNode.(schema.TypedNode), field)
 }
 
 func (e *executionContext) queryCollection(ctx context.Context, field graphql.CollectedField) (any, error) {
@@ -83,13 +81,12 @@ func (e *executionContext) queryField(ctx context.Context, n schema.TypedNode, f
 	if len(field.SelectionSet) == 0 {
 		return node.Value(n)
 	}
-	// check if the node is a document id
-	if collection, ok := node.IsDocumentID(n.Type()); ok {
+	if e.system.IsRelation(n.Type()) {
 		id, err := n.AsString()
 		if err != nil {
 			return nil, err
 		}
-		return e.queryDocument(ctx, field, collection, id)
+		return e.queryDocument(ctx, field, n.Type().Name(), id)
 	}
 	switch n.Kind() {
 	case datamodel.Kind_Link:
@@ -143,7 +140,7 @@ func (e *executionContext) queryMap(ctx context.Context, n schema.TypedNode, fie
 		case "_link":
 			result[field.Alias] = ctx.Value(linkContextKey).(datamodel.Link).String()
 		case "__typename":
-			result[field.Alias] = n.(schema.TypedNode).Type().Name()
+			result[field.Alias] = strings.TrimSuffix(n.Type().Name(), types.DocumentSuffix)
 		default:
 			obj, err := n.LookupByString(field.Name)
 			if err != nil {

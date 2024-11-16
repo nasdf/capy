@@ -65,3 +65,16 @@ func (s *Store) Store(ctx context.Context, node datamodel.Node) (datamodel.Link,
 func (s *Store) Traversal(ctx context.Context) traversal.Progress {
 	return traversal.Progress{Cfg: defaultTraversalConfig(ctx, s.links)}
 }
+
+// GetNode returns the node at the given path starting from the given node.
+func (s *Store) GetNode(ctx context.Context, path datamodel.Path, node datamodel.Node) (datamodel.Node, error) {
+	return s.Traversal(ctx).Get(node, path)
+}
+
+// SetNode sets the node at the given path starting from the given node returning the updated node.
+func (s *Store) SetNode(ctx context.Context, path datamodel.Path, node datamodel.Node, value datamodel.Node) (datamodel.Node, error) {
+	fn := func(p traversal.Progress, n datamodel.Node) (datamodel.Node, error) {
+		return value, nil
+	}
+	return s.Traversal(ctx).FocusedTransform(node, path, fn, true)
+}

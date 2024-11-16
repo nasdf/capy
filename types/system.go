@@ -12,9 +12,8 @@ import (
 )
 
 type System struct {
-	schema      string
-	system      *ipldschema.TypeSystem
-	collections []string
+	schema string
+	system *ipldschema.TypeSystem
 }
 
 func NewSystem(schema string) (*System, error) {
@@ -22,21 +21,20 @@ func NewSystem(schema string) (*System, error) {
 	if err != nil {
 		return nil, err
 	}
-	collections := []string{}
-	for _, d := range s.Types {
-		if !d.BuiltIn && d.Kind == ast.Object {
-			collections = append(collections, d.Name)
-		}
-	}
-	system := accumulate(s, collections)
+	system := accumulate(s)
 	if err := system.ValidateGraph(); len(err) > 0 {
 		return nil, errors.Join(err...)
 	}
 	return &System{
-		schema:      schema,
-		system:      system,
-		collections: collections,
+		schema: schema,
+		system: system,
 	}, nil
+}
+
+// IsRelation returns true if the given type is a relation.
+func (s System) IsRelation(t schema.Type) bool {
+	_, ok := s.system.GetTypes()[t.Name()+DocumentSuffix]
+	return ok && t.TypeKind() == ipldschema.TypeKind_String
 }
 
 func (s System) Type(name string) schema.Type {
@@ -45,10 +43,6 @@ func (s System) Type(name string) schema.Type {
 
 func (s System) Prototype(name string) datamodel.NodePrototype {
 	return bindnode.Prototype(nil, s.Type(name))
-}
-
-func (s System) Collections() []string {
-	return s.collections
 }
 
 // RootNode returns a new empty root node.
