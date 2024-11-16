@@ -1,0 +1,46 @@
+# This test ensures that available types work as expected
+schema: |
+  type Record {
+    a1: ID
+    a2: ID!
+    
+    b1: Int
+    b2: Int!
+    
+    c1: Float
+    c2: Float!
+    
+    d1: Boolean
+    d2: Boolean!
+    
+    e1: String
+    e2: String!
+    
+    f1: [Int]
+    f2: [Int!]
+    f3: [Int]!
+    f4: [Int!]!
+    
+    g1: [Float]
+    g2: [Float!]
+    g3: [Float]!
+    g4: [Float!]!
+
+    h1: [Boolean]
+    h2: [Boolean!]
+    h3: [Boolean]!
+    h4: [Boolean!]!
+    
+    i1: [String]
+    i2: [String!]
+    i3: [String]!
+    i4: [String!]!
+    
+    j1: Record
+    j2: Record!
+    
+    k1: [Record]
+    k2: [Record!]
+    k3: [Record]!
+    k4: [Record!]!
+  }

@@ -17,15 +17,10 @@ const (
 
 var (
 	TypeID                 = schema.SpawnString("ID")
-	TypeNotNullID          = schema.SpawnString("ID!")
 	TypeInt                = schema.SpawnInt("Int")
-	TypeNotNullInt         = schema.SpawnInt("Int!")
 	TypeFloat              = schema.SpawnFloat("Float")
-	TypeNotNullFloat       = schema.SpawnFloat("Float!")
 	TypeBoolean            = schema.SpawnBool("Boolean")
-	TypeNotNullBoolean     = schema.SpawnBool("Boolean!")
 	TypeString             = schema.SpawnString("String")
-	TypeNotNullString      = schema.SpawnString("String!")
 	TypeIntList            = schema.SpawnList("[Int]", TypeInt.Name(), true)
 	TypeNotNullIntList     = schema.SpawnList("[Int!]", TypeInt.Name(), false)
 	TypeFloatList          = schema.SpawnList("[Float]", TypeFloat.Name(), true)
@@ -39,15 +34,10 @@ var (
 func defaultTypeSystem() *schema.TypeSystem {
 	return schema.MustTypeSystem(
 		TypeID,
-		TypeNotNullID,
 		TypeInt,
-		TypeNotNullInt,
 		TypeFloat,
-		TypeNotNullFloat,
 		TypeBoolean,
-		TypeNotNullBoolean,
 		TypeString,
-		TypeNotNullString,
 		TypeIntList,
 		TypeNotNullIntList,
 		TypeFloatList,
@@ -72,7 +62,13 @@ func schemaTypeSystem(s *ast.Schema) *schema.TypeSystem {
 		case ast.Object:
 			fields := make([]schema.StructField, len(d.Fields))
 			for i, f := range d.Fields {
-				fields[i] = schema.SpawnStructField(f.Name, f.Type.String(), !f.Type.NonNull, !f.Type.NonNull)
+				var fieldType string
+				if f.Type.Elem != nil {
+					fieldType = fmt.Sprintf("[%s]", f.Type.Elem.String())
+				} else {
+					fieldType = f.Type.NamedType
+				}
+				fields[i] = schema.SpawnStructField(f.Name, fieldType, !f.Type.NonNull, !f.Type.NonNull)
 			}
 			ts.Accumulate(schema.SpawnStruct(d.Name+DocumentSuffix, fields, schema.SpawnStructRepresentationMap(nil)))
 
