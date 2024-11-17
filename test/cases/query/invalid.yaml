@@ -1,0 +1,22 @@
+# This test ensures that invalid query responses work as expected
+schema: |
+  type User {
+    name: String
+  }
+operations:
+  - params:
+      query: |
+        query {
+          User {
+            invalid
+          }
+        }
+    response: |
+      {
+        "errors": [
+          {
+            "message": "Cannot query field \"invalid\" on type \"User\".",
+            "locations": [{"column": 5, "line": 3}]
+          }
+        ]
+      }

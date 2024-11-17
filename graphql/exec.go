@@ -7,6 +7,8 @@ import (
 	"github.com/nasdf/capy/types"
 
 	"github.com/99designs/gqlgen/graphql"
+	"github.com/ipld/go-ipld-prime/datamodel"
+	"github.com/ipld/go-ipld-prime/node/basicnode"
 	"github.com/vektah/gqlparser/v2"
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"
@@ -27,29 +29,45 @@ type QueryParams struct {
 	Variables     map[string]any `json:"variables"`
 }
 
-// QueryResponse contains the fields expected from a GraphQL response.
-type QueryResponse struct {
-	Data   any `json:"data"`
-	Errors any `json:"errors,omitempty"`
+// Execute runs the query and returns a node containing the result of the query operation.
+func Execute(ctx context.Context, system *types.System, store *core.Store, schema *ast.Schema, params QueryParams) (datamodel.Node, error) {
+	nb := basicnode.Prototype.Any.NewBuilder()
+	ma, err := nb.BeginMap(2)
+	if err != nil {
+		return nil, err
+	}
+	err = execute(ctx, system, store, schema, params, ma)
+	if err != nil {
+		return nil, err
+	}
+	err = ma.Finish()
+	if err != nil {
+		return nil, err
+	}
+	return nb.Build(), nil
 }
 
-func Execute(ctx context.Context, system *types.System, store *core.Store, schema *ast.Schema, params QueryParams) (any, error) {
-	doc, errs := gqlparser.LoadQuery(schema, params.Query)
+func execute(ctx context.Context, system *types.System, store *core.Store, schema *ast.Schema, params QueryParams, na datamodel.MapAssembler) error {
+	query, errs := gqlparser.LoadQuery(schema, params.Query)
 	if errs != nil {
-		return nil, errs
+		return assignErrors(errs, na)
 	}
 	exe := executionContext{
 		schema: schema,
 		store:  store,
 		system: system,
 		params: params,
-		query:  doc,
+		query:  query,
 	}
-	data, err := exe.execute(ctx)
+	va, err := na.AssembleEntry("data")
 	if err != nil {
-		return data, gqlerror.List{gqlerror.WrapIfUnwrapped(err)}
+		return err
 	}
-	return data, nil
+	err = exe.execute(ctx, va)
+	if err != nil {
+		return assignErrors(gqlerror.List{gqlerror.WrapIfUnwrapped(err)}, na)
+	}
+	return nil
 }
 
 type executionContext struct {
@@ -60,7 +78,7 @@ type executionContext struct {
 	params QueryParams
 }
 
-func (e *executionContext) execute(ctx context.Context) (any, error) {
+func (e *executionContext) execute(ctx context.Context, na datamodel.NodeAssembler) error {
 	var operation *ast.OperationDefinition
 	if e.params.OperationName != "" {
 		operation = e.query.Operations.ForName(e.params.OperationName)
@@ -68,20 +86,20 @@ func (e *executionContext) execute(ctx context.Context) (any, error) {
 		operation = e.query.Operations[0]
 	}
 	if operation == nil {
-		return nil, gqlerror.Errorf("operation is not defined")
+		return gqlerror.Errorf("operation is not defined")
 	}
 	rootLink, err := e.store.RootLink(ctx)
 	if err != nil {
-		return nil, gqlerror.Wrap(err)
+		return err
 	}
 	ctx = context.WithValue(ctx, rootContextKey, rootLink)
 	switch operation.Operation {
 	case ast.Mutation:
-		return e.executeMutation(ctx, operation.SelectionSet)
+		return e.executeMutation(ctx, operation.SelectionSet, na)
 	case ast.Query:
-		return e.executeQuery(ctx, operation.SelectionSet)
+		return e.executeQuery(ctx, operation.SelectionSet, na)
 	default:
-		return nil, gqlerror.Errorf("unsupported operation %s", operation.Operation)
+		return gqlerror.Errorf("unsupported operation %s", operation.Operation)
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"github.com/nasdf/capy/graphql"
 	"github.com/nasdf/capy/types"
 
+	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
 	"github.com/vektah/gqlparser/v2/ast"
 )
@@ -79,6 +80,6 @@ func Open(ctx context.Context, store *core.Store) (*DB, error) {
 	}, nil
 }
 
-func (db *DB) Execute(ctx context.Context, params graphql.QueryParams) (any, error) {
+func (db *DB) Execute(ctx context.Context, params graphql.QueryParams) (datamodel.Node, error) {
 	return graphql.Execute(ctx, db.Types, db.Store, db.Schema, params)
 }

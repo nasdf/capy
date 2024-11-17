@@ -3,212 +3,608 @@ package graphql
 import (
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/introspection"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/vektah/gqlparser/v2/ast"
 )
 
-func (e *executionContext) introspectSchema(obj *introspection.Schema, sel ast.SelectionSet) map[string]any {
+func (e *executionContext) introspectSchema(obj *introspection.Schema, sel ast.SelectionSet, na datamodel.NodeAssembler) error {
 	fields := e.collectFields(sel, "__Schema")
-	result := make(map[string]any)
+	ma, err := na.BeginMap(int64(len(fields)))
+	if err != nil {
+		return err
+	}
 	for _, field := range fields {
 		switch field.Name {
 		case "__typename":
-			result[field.Alias] = "__Schema"
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = va.AssignString("__Schema")
+			if err != nil {
+				return err
+			}
+
 		case "types":
-			result[field.Alias] = e.introspectSchemaTypes(field.SelectionSet)
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = e.introspectSchemaTypes(field.SelectionSet, va)
+			if err != nil {
+				return err
+			}
+
 		case "queryType":
-			result[field.Alias] = e.introspectType(obj.QueryType(), field.SelectionSet)
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = e.introspectType(obj.QueryType(), field.SelectionSet, va)
+			if err != nil {
+				return err
+			}
+
 		case "mutationType":
-			result[field.Alias] = e.introspectType(obj.MutationType(), field.SelectionSet)
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = e.introspectType(obj.MutationType(), field.SelectionSet, va)
+			if err != nil {
+				return err
+			}
+
 		case "subscriptionType":
-			result[field.Alias] = e.introspectType(obj.SubscriptionType(), field.SelectionSet)
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = e.introspectType(obj.SubscriptionType(), field.SelectionSet, va)
+			if err != nil {
+				return err
+			}
+
 		case "directives":
-			result[field.Alias] = e.introspectDirectives(obj.Directives(), field.SelectionSet)
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = e.introspectDirectives(obj.Directives(), field.SelectionSet, va)
+			if err != nil {
+				return err
+			}
 		}
 	}
-	return result
+	return ma.Finish()
 }
 
-func (e *executionContext) introspectType(obj *introspection.Type, sel ast.SelectionSet) map[string]any {
-	if obj == nil {
-		return nil
-	}
+func (e *executionContext) introspectType(obj *introspection.Type, sel ast.SelectionSet, na datamodel.NodeAssembler) error {
 	fields := e.collectFields(sel, "__Type")
-	result := make(map[string]any)
+	if obj == nil {
+		return na.AssignNull()
+	}
+	ma, err := na.BeginMap(int64(len(fields)))
+	if err != nil {
+		return err
+	}
 	for _, field := range fields {
 		switch field.Name {
 		case "__typename":
-			result[field.Alias] = "__Type"
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = va.AssignString("__Type")
+			if err != nil {
+				return err
+			}
+
 		case "kind":
-			result[field.Alias] = obj.Kind()
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = va.AssignString(obj.Kind())
+			if err != nil {
+				return err
+			}
+
 		case "name":
-			result[field.Alias] = obj.Name()
+			out := obj.Name()
+			if out == nil {
+				continue
+			}
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = va.AssignString(*out)
+			if err != nil {
+				return err
+			}
+
 		case "description":
-			result[field.Alias] = obj.Description()
+			out := obj.Description()
+			if out == nil {
+				continue
+			}
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = va.AssignString(*out)
+			if err != nil {
+				return err
+			}
+
 		case "fields":
-			result[field.Alias] = e.introspectTypeFields(obj, field.Field)
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = e.introspectTypeFields(obj, field.Field, va)
+			if err != nil {
+				return err
+			}
+
 		case "interfaces":
-			result[field.Alias] = e.introspectTypes(obj.Interfaces(), field.SelectionSet)
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = e.introspectTypes(obj.Interfaces(), field.SelectionSet, va)
+			if err != nil {
+				return err
+			}
+
 		case "possibleTypes":
-			result[field.Alias] = e.introspectTypes(obj.PossibleTypes(), field.SelectionSet)
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = e.introspectTypes(obj.PossibleTypes(), field.SelectionSet, va)
+			if err != nil {
+				return err
+			}
+
 		case "enumValues":
-			result[field.Alias] = e.introspectTypeEnumValues(obj, field.Field)
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = e.introspectTypeEnumValues(obj, field.Field, va)
+			if err != nil {
+				return err
+			}
+
 		case "inputFields":
-			result[field.Alias] = e.introspectInputValues(obj.InputFields(), field.SelectionSet)
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = e.introspectInputValues(obj.InputFields(), field.SelectionSet, va)
+			if err != nil {
+				return err
+			}
+
 		case "ofType":
-			result[field.Alias] = e.introspectType(obj.OfType(), field.SelectionSet)
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = e.introspectType(obj.OfType(), field.SelectionSet, va)
+			if err != nil {
+				return err
+			}
 		}
 	}
-	return result
+	return ma.Finish()
 }
 
-func (e *executionContext) introspectField(obj *introspection.Field, sel ast.SelectionSet) map[string]any {
+func (e *executionContext) introspectField(obj *introspection.Field, sel ast.SelectionSet, na datamodel.NodeAssembler) error {
 	fields := e.collectFields(sel, "__Field")
-	result := make(map[string]any)
+	ma, err := na.BeginMap(int64(len(fields)))
+	if err != nil {
+		return err
+	}
 	for _, field := range fields {
 		switch field.Name {
 		case "__typename":
-			result[field.Alias] = "__Field"
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = va.AssignString("__Field")
+			if err != nil {
+				return err
+			}
+
 		case "name":
-			result[field.Alias] = obj.Name
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = va.AssignString(obj.Name)
+			if err != nil {
+				return err
+			}
+
 		case "description":
-			result[field.Alias] = obj.Description()
+			out := obj.Description()
+			if out == nil {
+				continue
+			}
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = va.AssignString(*out)
+			if err != nil {
+				return err
+			}
+
 		case "args":
-			result[field.Alias] = e.introspectInputValues(obj.Args, field.SelectionSet)
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = e.introspectInputValues(obj.Args, field.SelectionSet, va)
+			if err != nil {
+				return err
+			}
+
 		case "type":
-			result[field.Alias] = e.introspectType(obj.Type, field.SelectionSet)
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = e.introspectType(obj.Type, field.SelectionSet, va)
+			if err != nil {
+				return err
+			}
+
 		case "isDeprecated":
-			result[field.Alias] = obj.IsDeprecated()
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = va.AssignBool(obj.IsDeprecated())
+			if err != nil {
+				return err
+			}
+
 		case "deprecationReason":
-			result[field.Alias] = obj.DeprecationReason()
+			out := obj.DeprecationReason()
+			if out == nil {
+				continue
+			}
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = va.AssignString(*out)
+			if err != nil {
+				return err
+			}
 		}
 	}
-	return result
+	return ma.Finish()
 }
 
-func (e *executionContext) introspectInputValue(obj introspection.InputValue, sel ast.SelectionSet) map[string]any {
+func (e *executionContext) introspectInputValue(obj introspection.InputValue, sel ast.SelectionSet, na datamodel.NodeAssembler) error {
 	fields := e.collectFields(sel, "__InputValue")
-	result := make(map[string]any)
+	ma, err := na.BeginMap(int64(len(fields)))
+	if err != nil {
+		return err
+	}
 	for _, field := range fields {
 		switch field.Name {
 		case "__typename":
-			result[field.Alias] = "__InputValue"
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = va.AssignString("__InputValue")
+			if err != nil {
+				return err
+			}
+
 		case "name":
-			result[field.Alias] = obj.Name
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = va.AssignString(obj.Name)
+			if err != nil {
+				return err
+			}
+
 		case "description":
-			result[field.Alias] = obj.Description()
+			out := obj.Description()
+			if out == nil {
+				continue
+			}
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = va.AssignString(*out)
+			if err != nil {
+				return err
+			}
+
 		case "type":
-			result[field.Alias] = e.introspectType(obj.Type, field.SelectionSet)
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = e.introspectType(obj.Type, field.SelectionSet, va)
+			if err != nil {
+				return err
+			}
+
 		case "defaultValue":
-			result[field.Alias] = obj.DefaultValue
+			out := obj.DefaultValue
+			if out == nil {
+				continue
+			}
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = va.AssignString(*out)
+			if err != nil {
+				return err
+			}
 		}
 	}
-	return result
+	return ma.Finish()
 }
 
-func (e *executionContext) introspectEnumValue(obj introspection.EnumValue, sel ast.SelectionSet) map[string]any {
+func (e *executionContext) introspectEnumValue(obj introspection.EnumValue, sel ast.SelectionSet, na datamodel.NodeAssembler) error {
 	fields := e.collectFields(sel, "__EnumValue")
-	result := make(map[string]any)
+	ma, err := na.BeginMap(int64(len(fields)))
+	if err != nil {
+		return err
+	}
 	for _, field := range fields {
+
 		switch field.Name {
 		case "__typename":
-			result[field.Alias] = "__EnumValue"
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = va.AssignString("__EnumValue")
+			if err != nil {
+				return err
+			}
+
 		case "name":
-			result[field.Alias] = obj.Name
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = va.AssignString(obj.Name)
+			if err != nil {
+				return err
+			}
+
 		case "description":
-			result[field.Alias] = obj.Description()
+			out := obj.Description()
+			if out == nil {
+				continue
+			}
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = va.AssignString(*out)
+			if err != nil {
+				return err
+			}
+
 		case "isDeprecated":
-			result[field.Alias] = obj.IsDeprecated()
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = va.AssignBool(obj.IsDeprecated())
+			if err != nil {
+				return err
+			}
+
 		case "deprecationReason":
-			result[field.Alias] = obj.DeprecationReason()
+			out := obj.DeprecationReason()
+			if out == nil {
+				continue
+			}
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = va.AssignString(*out)
+			if err != nil {
+				return err
+			}
 		}
 	}
-	return result
+	return ma.Finish()
 }
 
-func (e *executionContext) introspectDirective(obj introspection.Directive, sel ast.SelectionSet) map[string]any {
+func (e *executionContext) introspectDirective(obj introspection.Directive, sel ast.SelectionSet, na datamodel.NodeAssembler) error {
 	fields := e.collectFields(sel, "__Directive")
-	result := make(map[string]any)
+	ma, err := na.BeginMap(int64(len(fields)))
+	if err != nil {
+		return err
+	}
 	for _, field := range fields {
 		switch field.Name {
 		case "__typename":
-			result[field.Alias] = "__Directive"
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = va.AssignString("__Directive")
+			if err != nil {
+				return err
+			}
+
 		case "name":
-			result[field.Alias] = obj.Name
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = va.AssignString(obj.Name)
+			if err != nil {
+				return err
+			}
+
 		case "description":
-			result[field.Alias] = obj.Description()
+			out := obj.Description()
+			if out == nil {
+				continue
+			}
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = va.AssignString(*out)
+			if err != nil {
+				return err
+			}
+
 		case "locations":
-			result[field.Alias] = obj.Locations
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			la, err := va.BeginList(int64(len(obj.Locations)))
+			if err != nil {
+				return err
+			}
+			for _, out := range obj.Locations {
+				err = la.AssembleValue().AssignString(out)
+				if err != nil {
+					return err
+				}
+			}
+			err = la.Finish()
+			if err != nil {
+				return err
+			}
+
 		case "args":
-			result[field.Alias] = e.introspectInputValues(obj.Args, field.SelectionSet)
+			va, err := ma.AssembleEntry(field.Alias)
+			if err != nil {
+				return err
+			}
+			err = e.introspectInputValues(obj.Args, field.SelectionSet, va)
+			if err != nil {
+				return err
+			}
 		}
 	}
-	return result
+	return ma.Finish()
 }
 
-func (e *executionContext) introspectDirectives(obj []introspection.Directive, sel ast.SelectionSet) []any {
-	result := make([]any, len(obj))
-	for i, d := range obj {
-		result[i] = e.introspectDirective(d, sel)
+func (e *executionContext) introspectDirectives(obj []introspection.Directive, sel ast.SelectionSet, na datamodel.NodeAssembler) error {
+	la, err := na.BeginList(int64(len(obj)))
+	if err != nil {
+		return err
 	}
-	return result
+	for _, d := range obj {
+		err = e.introspectDirective(d, sel, la.AssembleValue())
+		if err != nil {
+			return err
+		}
+	}
+	return la.Finish()
 }
 
-func (e *executionContext) introspectSchemaTypes(sel ast.SelectionSet) []any {
-	result := make([]any, 0, len(e.schema.Types))
+func (e *executionContext) introspectSchemaTypes(sel ast.SelectionSet, na datamodel.NodeAssembler) error {
+	la, err := na.BeginList(int64(len(e.schema.Types)))
+	if err != nil {
+		return err
+	}
 	for _, t := range e.schema.Types {
-		result = append(result, e.introspectType(introspection.WrapTypeFromDef(e.schema, t), sel))
+		err = e.introspectType(introspection.WrapTypeFromDef(e.schema, t), sel, la.AssembleValue())
+		if err != nil {
+			return err
+		}
 	}
-	return result
+	return la.Finish()
 }
 
-func (e *executionContext) introspectTypeEnumValues(obj *introspection.Type, field *ast.Field) []any {
+func (e *executionContext) introspectTypeEnumValues(obj *introspection.Type, field *ast.Field, na datamodel.NodeAssembler) error {
 	args := field.ArgumentMap(e.params.Variables)
-	res := obj.EnumValues(args["includeDeprecated"].(bool))
-	return e.introspectEnumValues(res, field.SelectionSet)
-}
-
-func (e *executionContext) introspectEnumValues(obj []introspection.EnumValue, sel ast.SelectionSet) []any {
-	result := make([]any, len(obj))
-	for i, v := range obj {
-		result[i] = e.introspectEnumValue(v, sel)
+	vals := obj.EnumValues(args["includeDeprecated"].(bool))
+	la, err := na.BeginList(int64(len(vals)))
+	if err != nil {
+		return err
 	}
-	return result
-}
-
-func (e *executionContext) introspectInputValues(obj []introspection.InputValue, sel ast.SelectionSet) []any {
-	result := make([]any, len(obj))
-	for i, o := range obj {
-		result[i] = e.introspectInputValue(o, sel)
+	for _, v := range vals {
+		err = e.introspectEnumValue(v, field.SelectionSet, la.AssembleValue())
+		if err != nil {
+			return err
+		}
 	}
-	return result
+	return la.Finish()
 }
 
-func (e *executionContext) introspectQuerySchema(field graphql.CollectedField) map[string]any {
+func (e *executionContext) introspectInputValues(obj []introspection.InputValue, sel ast.SelectionSet, na datamodel.NodeAssembler) error {
+	la, err := na.BeginList(int64(len(obj)))
+	if err != nil {
+		return err
+	}
+	for _, o := range obj {
+		err = e.introspectInputValue(o, sel, la.AssembleValue())
+		if err != nil {
+			return err
+		}
+	}
+	return la.Finish()
+}
+
+func (e *executionContext) introspectQuerySchema(field graphql.CollectedField, na datamodel.NodeAssembler) error {
 	typ := introspection.WrapSchema(e.schema)
-	return e.introspectSchema(typ, field.SelectionSet)
+	return e.introspectSchema(typ, field.SelectionSet, na)
 }
 
-func (e *executionContext) introspectQueryType(field graphql.CollectedField) map[string]any {
+func (e *executionContext) introspectQueryType(field graphql.CollectedField, na datamodel.NodeAssembler) error {
 	args := field.ArgumentMap(e.params.Variables)
 	name := args["name"].(string)
 	typ := introspection.WrapTypeFromDef(e.schema, e.schema.Types[name])
-	return e.introspectType(typ, field.SelectionSet)
+	return e.introspectType(typ, field.SelectionSet, na)
 }
 
-func (e *executionContext) introspectTypeFields(typ *introspection.Type, field *ast.Field) []any {
+func (e *executionContext) introspectTypeFields(typ *introspection.Type, field *ast.Field, na datamodel.NodeAssembler) error {
 	args := field.ArgumentMap(e.params.Variables)
-	res := typ.Fields(args["includeDeprecated"].(bool))
-	out := make([]any, len(res))
-	for i, r := range res {
-		out[i] = e.introspectField(&r, field.SelectionSet)
+	vals := typ.Fields(args["includeDeprecated"].(bool))
+	la, err := na.BeginList(int64(len(vals)))
+	if err != nil {
+		return err
 	}
-	return out
+	for _, v := range vals {
+		err = e.introspectField(&v, field.SelectionSet, la.AssembleValue())
+		if err != nil {
+			return err
+		}
+	}
+	return la.Finish()
 }
 
-func (e *executionContext) introspectTypes(obj []introspection.Type, sel ast.SelectionSet) []any {
-	result := make([]any, len(obj))
-	for i, t := range obj {
-		result[i] = e.introspectType(&t, sel)
+func (e *executionContext) introspectTypes(obj []introspection.Type, sel ast.SelectionSet, na datamodel.NodeAssembler) error {
+	la, err := na.BeginList(int64(len(obj)))
+	if err != nil {
+		return err
 	}
-	return result
+	for _, t := range obj {
+		err = e.introspectType(&t, sel, la.AssembleValue())
+		if err != nil {
+			return err
+		}
+	}
+	return la.Finish()
 }

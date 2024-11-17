@@ -14,9 +14,11 @@ operations:
             }
           }
         }
-    response:
-      data:
-        createNode:
-          children: 
-            - value: 0
-            - value: 1
+    response: |
+      {
+        "data": {
+          "createNode": {
+            "children": [{"value": 0}, {"value": 1}]
+          }
+        }
+      }

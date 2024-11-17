@@ -11,10 +11,14 @@ operations:
             title
           }
         }
-    response:
-      data:
-        createFilm:
-          title: "Hackers"
+    response: |
+      {
+        "data": {
+          "createFilm": {
+            "title": "Hackers"
+          }
+        }
+      }
   - params:
       query: |
         mutation {
@@ -22,7 +26,11 @@ operations:
             title
           }
         }
-    response:
-      data:
-        createFilm:
-          title: "Idiocracy"
+    response: |
+      {
+        "data": {
+          "createFilm": {
+            "title": "Idiocracy"
+          }
+        }
+      }

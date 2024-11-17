@@ -16,14 +16,14 @@ type TestCase struct {
 	// Schema is the GraphQL schema used to create a Capy instance.
 	Schema string
 	// Operations is a list of all GraphQL operations to run in this test case.
-	Operations []TestCaseOperation
+	Operations []Operation
 }
 
-type TestCaseOperation struct {
+type Operation struct {
 	// Params contains the GraphQL parameters for this operation.
 	Params graphql.QueryParams
 	// Response contains the expected GraphQL response.
-	Response graphql.QueryResponse
+	Response string
 }
 
 // TestCasePaths returns a list of all test case file paths.

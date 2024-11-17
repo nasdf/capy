@@ -11,7 +11,11 @@ operations:
             results
           }
         }
-    response:
-      data:
-        createRecord:
-          results: [0, 1, 2, 3]
+    response: |
+      {
+        "data": {
+          "createRecord": {
+            "results": [0, 1, 2, 3]
+          }
+        }
+      }

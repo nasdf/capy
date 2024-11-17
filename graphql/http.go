@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+
+	jsonc "github.com/ipld/go-ipld-prime/codec/json"
+	"github.com/ipld/go-ipld-prime/datamodel"
 )
 
 type Executor interface {
-	Execute(context.Context, QueryParams) (any, error)
+	Execute(context.Context, QueryParams) (datamodel.Node, error)
 }
 
 // Handler returns an http.Handler that can serve GraphQL requests.
@@ -34,10 +37,13 @@ func Handler(e Executor) http.Handler {
 			http.Error(w, fmt.Sprintf("failed to parse request: %v", err), http.StatusBadRequest)
 			return
 		}
+		res, err := e.Execute(r.Context(), params)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
-		data, err := e.Execute(r.Context(), params)
-		resp := QueryResponse{Data: data, Errors: err}
-		err = json.NewEncoder(w).Encode(&resp)
+		err = jsonc.Encode(res, w)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

@@ -16,46 +16,51 @@ import (
 
 const createMutationPrefix = "create"
 
-func (e *executionContext) executeMutation(ctx context.Context, set ast.SelectionSet) (map[string]any, error) {
-	fields := e.collectFields(set, "Mutation")
-	result := make(map[string]any)
+func (e *executionContext) executeMutation(ctx context.Context, set ast.SelectionSet, na datamodel.NodeAssembler) error {
 	rootLink := ctx.Value(rootContextKey).(datamodel.Link)
+	fields := e.collectFields(set, "Mutation")
 
+	ma, err := na.BeginMap(int64(len(fields)))
+	if err != nil {
+		return err
+	}
 	for _, field := range fields {
+		va, err := ma.AssembleEntry(field.Alias)
+		if err != nil {
+			return err
+		}
 		switch {
 		case strings.HasPrefix(field.Name, createMutationPrefix):
 			collection := strings.TrimPrefix(field.Name, createMutationPrefix)
-			val, lnk, err := e.createMutation(ctx, field, collection)
+			lnk, err := e.createMutation(ctx, field, collection, va)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			rootLink = lnk
-			result[field.Alias] = val
 
 		default:
-			return nil, gqlerror.Errorf("unsupported mutation %s", field.Name)
+			return gqlerror.Errorf("unsupported mutation %s", field.Name)
 		}
 	}
-
-	err := e.store.SetRootLink(ctx, rootLink)
+	err = e.store.SetRootLink(ctx, rootLink)
 	if err != nil {
-		return nil, gqlerror.Wrap(err)
+		return err
 	}
-	return result, nil
+	return ma.Finish()
 }
 
-func (e *executionContext) createMutation(ctx context.Context, field graphql.CollectedField, collection string) (any, datamodel.Link, error) {
+func (e *executionContext) createMutation(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) (datamodel.Link, error) {
 	args := field.ArgumentMap(e.params.Variables)
 	builder := node.NewBuilder(e.store, e.system)
 	rootLink := ctx.Value(rootContextKey).(datamodel.Link)
 
 	id, err := builder.Build(ctx, collection, args["data"])
 	if err != nil {
-		return nil, nil, gqlerror.ErrorPosf(field.Position, err.Error())
+		return nil, err
 	}
 	rootNode, err := e.store.Load(ctx, rootLink, e.system.Prototype(types.RootTypeName))
 	if err != nil {
-		return nil, nil, gqlerror.ErrorPosf(field.Position, err.Error())
+		return nil, err
 	}
 
 	for collection, documents := range builder.Links() {
@@ -63,7 +68,7 @@ func (e *executionContext) createMutation(ctx context.Context, field graphql.Col
 			rootPath := datamodel.ParsePath(collection).AppendSegmentString(id)
 			rootNode, err = e.store.SetNode(ctx, rootPath, rootNode, basicnode.NewLink(lnk))
 			if err != nil {
-				return nil, nil, gqlerror.ErrorPosf(field.Position, err.Error())
+				return nil, err
 			}
 		}
 	}
@@ -71,17 +76,17 @@ func (e *executionContext) createMutation(ctx context.Context, field graphql.Col
 	rootPath := datamodel.ParsePath(types.RootParentsFieldName).AppendSegmentString("-")
 	rootNode, err = e.store.SetNode(ctx, rootPath, rootNode, basicnode.NewLink(rootLink))
 	if err != nil {
-		return nil, nil, gqlerror.ErrorPosf(field.Position, err.Error())
+		return nil, err
 	}
 	rootLink, err = e.store.Store(ctx, rootNode)
 	if err != nil {
-		return nil, nil, gqlerror.ErrorPosf(field.Position, err.Error())
+		return nil, err
 	}
 
 	ctx = context.WithValue(ctx, rootContextKey, rootLink)
-	val, err := e.queryDocument(ctx, field, collection, id)
+	err = e.queryDocument(ctx, field, collection, id, na)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return val, rootLink, nil
+	return rootLink, nil
 }

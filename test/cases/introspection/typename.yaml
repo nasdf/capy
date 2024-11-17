@@ -11,7 +11,11 @@ operations:
             __typename
           }
         }
-    response:
-      data:
-        createFilm:
-          __typename: "Film"
+    response: |
+      {
+        "data": {
+          "createFilm": {
+            "__typename": "Film"
+          }
+        }
+      }
