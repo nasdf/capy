@@ -6,19 +6,19 @@ import (
 
 	"github.com/nasdf/capy/node"
 	"github.com/nasdf/capy/types"
-	"github.com/vektah/gqlparser/v2/ast"
-	"github.com/vektah/gqlparser/v2/gqlerror"
 
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
+	"github.com/vektah/gqlparser/v2/ast"
+	"github.com/vektah/gqlparser/v2/gqlerror"
 )
 
 const createMutationPrefix = "create"
 
 func (e *executionContext) executeMutation(ctx context.Context, set ast.SelectionSet) (map[string]any, error) {
 	fields := e.collectFields(set, "Mutation")
-	out := make(map[string]any)
+	result := make(map[string]any)
 	rootLink := ctx.Value(rootContextKey).(datamodel.Link)
 
 	for _, field := range fields {
@@ -30,7 +30,7 @@ func (e *executionContext) executeMutation(ctx context.Context, set ast.Selectio
 				return nil, err
 			}
 			rootLink = lnk
-			out[field.Alias] = val
+			result[field.Alias] = val
 
 		default:
 			return nil, gqlerror.Errorf("unsupported mutation %s", field.Name)
@@ -41,7 +41,7 @@ func (e *executionContext) executeMutation(ctx context.Context, set ast.Selectio
 	if err != nil {
 		return nil, gqlerror.Wrap(err)
 	}
-	return out, nil
+	return result, nil
 }
 
 func (e *executionContext) createMutation(ctx context.Context, field graphql.CollectedField, collection string) (any, datamodel.Link, error) {

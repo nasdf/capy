@@ -7,7 +7,6 @@ import (
 	"github.com/nasdf/capy/types"
 
 	"github.com/99designs/gqlgen/graphql"
-	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/vektah/gqlparser/v2"
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"
@@ -39,37 +38,14 @@ func Execute(ctx context.Context, system *types.System, store *core.Store, schem
 	if errs != nil {
 		return nil, errs
 	}
-	var operation *ast.OperationDefinition
-	if params.OperationName != "" {
-		operation = doc.Operations.ForName(params.OperationName)
-	} else if len(doc.Operations) == 1 {
-		operation = doc.Operations[0]
+	exe := executionContext{
+		schema: schema,
+		store:  store,
+		system: system,
+		params: params,
+		query:  doc,
 	}
-	if operation == nil {
-		return nil, gqlerror.List{gqlerror.Errorf("operation is not defined")}
-	}
-	rootLink, err := store.RootLink(ctx)
-	if err != nil {
-		return nil, gqlerror.List{gqlerror.Wrap(err)}
-	}
-	ctx = context.WithValue(ctx, rootContextKey, rootLink)
-	exec := executionContext{
-		schema:   schema,
-		store:    store,
-		system:   system,
-		queryDoc: doc,
-		params:   params,
-		rootLink: rootLink,
-	}
-	var data any
-	switch operation.Operation {
-	case ast.Mutation:
-		data, err = exec.executeMutation(ctx, operation.SelectionSet)
-	case ast.Query:
-		data, err = exec.executeQuery(ctx, operation.SelectionSet)
-	default:
-		err = gqlerror.Errorf("unsupported operation %s", operation.Operation)
-	}
+	data, err := exe.execute(ctx)
 	if err != nil {
 		return data, gqlerror.List{gqlerror.WrapIfUnwrapped(err)}
 	}
@@ -77,19 +53,43 @@ func Execute(ctx context.Context, system *types.System, store *core.Store, schem
 }
 
 type executionContext struct {
-	schema   *ast.Schema
-	store    *core.Store
-	system   *types.System
-	queryDoc *ast.QueryDocument
-	params   QueryParams
-	rootLink datamodel.Link
+	schema *ast.Schema
+	store  *core.Store
+	system *types.System
+	query  *ast.QueryDocument
+	params QueryParams
+}
+
+func (e *executionContext) execute(ctx context.Context) (any, error) {
+	var operation *ast.OperationDefinition
+	if e.params.OperationName != "" {
+		operation = e.query.Operations.ForName(e.params.OperationName)
+	} else if len(e.query.Operations) == 1 {
+		operation = e.query.Operations[0]
+	}
+	if operation == nil {
+		return nil, gqlerror.Errorf("operation is not defined")
+	}
+	rootLink, err := e.store.RootLink(ctx)
+	if err != nil {
+		return nil, gqlerror.Wrap(err)
+	}
+	ctx = context.WithValue(ctx, rootContextKey, rootLink)
+	switch operation.Operation {
+	case ast.Mutation:
+		return e.executeMutation(ctx, operation.SelectionSet)
+	case ast.Query:
+		return e.executeQuery(ctx, operation.SelectionSet)
+	default:
+		return nil, gqlerror.Errorf("unsupported operation %s", operation.Operation)
+	}
 }
 
 func (e *executionContext) collectFields(sel ast.SelectionSet, satisfies ...string) []graphql.CollectedField {
 	reqCtx := &graphql.OperationContext{
 		RawQuery:  e.params.Query,
 		Variables: e.params.Variables,
-		Doc:       e.queryDoc,
+		Doc:       e.query,
 	}
 	return graphql.CollectFields(reqCtx, sel, satisfies)
 }
