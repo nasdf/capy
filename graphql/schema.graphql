@@ -17,6 +17,7 @@ extend type {{$name}} {
 Input for creating {{$name}} documents.
 """
 input {{$name}}CreateInput {
+    _id: ID
 {{- range $field := .Fields}}
     {{$def := index $.Types $field.Type.Name}}
     {{- if $def.IsLeafType}}

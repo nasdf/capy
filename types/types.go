@@ -53,9 +53,7 @@ var (
 )
 
 func schemaTypeSystem(s *ast.Schema) (*schema.TypeSystem, []error) {
-	types := make([]schema.Type, len(baseTypes))
-	copy(types, baseTypes)
-
+	types := append([]schema.Type{}, baseTypes...)
 	var rootFields []schema.StructField
 	for _, d := range s.Types {
 		if d.BuiltIn {
@@ -84,8 +82,8 @@ func schemaTypeSystem(s *ast.Schema) (*schema.TypeSystem, []error) {
 			collectionType := schema.SpawnMap(d.Name+CollectionSuffix, "String", linkType.Name(), false)
 			types = append(types, collectionType)
 
-			types = append(types, schema.SpawnList(fmt.Sprintf("[%s]", relationType.Name()), relationType.Name(), true))
-			types = append(types, schema.SpawnList(fmt.Sprintf("[%s!]", relationType.Name()), relationType.Name(), false))
+			types = append(types, schema.SpawnList(fmt.Sprintf("[%s]", d.Name), relationType.Name(), true))
+			types = append(types, schema.SpawnList(fmt.Sprintf("[%s!]", d.Name), relationType.Name(), false))
 
 			rootFields = append(rootFields, schema.SpawnStructField(d.Name, collectionType.Name(), false, false))
 

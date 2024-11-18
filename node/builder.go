@@ -17,23 +17,23 @@ import (
 
 // Builder assembles nodes from go input values.
 type Builder struct {
-	store  *core.Store
-	system *types.System
-	links  map[string]map[string]datamodel.Link
+	store     *core.Store
+	system    *types.System
+	documents map[string]datamodel.Link
 }
 
 // NewBuilder returns a new builder that uses the given type system to create nodes.
 func NewBuilder(store *core.Store, system *types.System) *Builder {
 	return &Builder{
-		store:  store,
-		system: system,
-		links:  make(map[string]map[string]datamodel.Link),
+		store:     store,
+		system:    system,
+		documents: make(map[string]datamodel.Link),
 	}
 }
 
-// Links returns a mapping of collection names to links that were created from building nodes.
-func (b *Builder) Links() map[string]map[string]datamodel.Link {
-	return b.links
+// Documents returns a mapping of paths to document links that were created from building nodes.
+func (b *Builder) Documents() map[string]datamodel.Link {
+	return b.documents
 }
 
 // Build creates a new node using the provided collection type and value returning its unique ID.
@@ -51,16 +51,13 @@ func (b *Builder) Build(ctx context.Context, collection string, value any) (stri
 	if err != nil {
 		return "", err
 	}
-	if _, ok := b.links[collection]; !ok {
-		b.links[collection] = make(map[string]datamodel.Link)
-	}
-	b.links[collection][id.String()] = lnk
+	b.documents[collection+"/"+id.String()] = lnk
 	return id.String(), nil
 }
 
 func (b *Builder) assignValue(ctx context.Context, t schema.Type, value any, na datamodel.NodeAssembler) error {
 	if b.system.IsRelation(t) {
-		return b.assignReference(ctx, t, value, na)
+		return b.assignReference(ctx, t, value.(map[string]any), na)
 	}
 	switch v := t.(type) {
 	case *schema.TypeBool:
@@ -94,8 +91,14 @@ func (b *Builder) assignLink(value string, na datamodel.NodeAssembler) error {
 	return na.AssignLink(cidlink.Link{Cid: id})
 }
 
-func (b *Builder) assignReference(ctx context.Context, t schema.Type, value any, na datamodel.NodeAssembler) error {
-	id, err := b.Build(ctx, t.Name(), value)
+func (b *Builder) assignReference(ctx context.Context, t schema.Type, value map[string]any, na datamodel.NodeAssembler) error {
+	collection := t.Name()
+	// if the provided input contains an id use that instead
+	id, ok := value["_id"].(string)
+	if ok {
+		return na.AssignString(id)
+	}
+	id, err := b.Build(ctx, collection, value)
 	if err != nil {
 		return err
 	}

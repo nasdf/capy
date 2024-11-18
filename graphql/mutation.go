@@ -63,13 +63,10 @@ func (e *executionContext) createMutation(ctx context.Context, field graphql.Col
 		return nil, err
 	}
 
-	for collection, documents := range builder.Links() {
-		for id, lnk := range documents {
-			rootPath := datamodel.ParsePath(collection).AppendSegmentString(id)
-			rootNode, err = e.store.SetNode(ctx, rootPath, rootNode, basicnode.NewLink(lnk))
-			if err != nil {
-				return nil, err
-			}
+	for k, v := range builder.Documents() {
+		rootNode, err = e.store.SetNode(ctx, datamodel.ParsePath(k), rootNode, basicnode.NewLink(v))
+		if err != nil {
+			return nil, err
 		}
 	}
 

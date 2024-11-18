@@ -59,15 +59,15 @@ func execute(ctx context.Context, system *types.System, store *core.Store, schem
 		params: params,
 		query:  query,
 	}
+	data, err := exe.execute(ctx)
+	if err != nil {
+		return assignErrors(gqlerror.List{gqlerror.WrapIfUnwrapped(err)}, na)
+	}
 	va, err := na.AssembleEntry("data")
 	if err != nil {
 		return err
 	}
-	err = exe.execute(ctx, va)
-	if err != nil {
-		return assignErrors(gqlerror.List{gqlerror.WrapIfUnwrapped(err)}, na)
-	}
-	return nil
+	return va.AssignNode(data)
 }
 
 type executionContext struct {
@@ -78,7 +78,7 @@ type executionContext struct {
 	params QueryParams
 }
 
-func (e *executionContext) execute(ctx context.Context, na datamodel.NodeAssembler) error {
+func (e *executionContext) execute(ctx context.Context) (datamodel.Node, error) {
 	var operation *ast.OperationDefinition
 	if e.params.OperationName != "" {
 		operation = e.query.Operations.ForName(e.params.OperationName)
@@ -86,21 +86,31 @@ func (e *executionContext) execute(ctx context.Context, na datamodel.NodeAssembl
 		operation = e.query.Operations[0]
 	}
 	if operation == nil {
-		return gqlerror.Errorf("operation is not defined")
+		return nil, gqlerror.Errorf("operation is not defined")
 	}
 	rootLink, err := e.store.RootLink(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	res := basicnode.Prototype.Map.NewBuilder()
 	ctx = context.WithValue(ctx, rootContextKey, rootLink)
 	switch operation.Operation {
 	case ast.Mutation:
-		return e.executeMutation(ctx, operation.SelectionSet, na)
+		err := e.executeMutation(ctx, operation.SelectionSet, res)
+		if err != nil {
+			return nil, err
+		}
+
 	case ast.Query:
-		return e.executeQuery(ctx, operation.SelectionSet, na)
+		err = e.executeQuery(ctx, operation.SelectionSet, res)
+		if err != nil {
+			return nil, err
+		}
+
 	default:
-		return gqlerror.Errorf("unsupported operation %s", operation.Operation)
+		return nil, gqlerror.Errorf("unsupported operation %s", operation.Operation)
 	}
+	return res.Build(), nil
 }
 
 func (e *executionContext) collectFields(sel ast.SelectionSet, satisfies ...string) []graphql.CollectedField {
