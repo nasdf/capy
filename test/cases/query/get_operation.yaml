@@ -1,0 +1,34 @@
+# This test ensures that get operations work as expected
+schema: |
+  type User {
+    name: String
+  }
+operations:
+  - query: |
+        mutation {
+          create_User(data: {name: "Michael Bolton"}) {
+            name
+          }
+        }
+    response: |
+      {
+        "data": {
+          "create_User": {
+            "name": "Michael Bolton"
+          }
+        }
+      }
+  - query: |
+        query {
+          get_User(id: "{{index .User.Keys 0}}") {
+            name
+          }
+        }
+    response: |
+      {
+        "data": {
+          "get_User": {
+            "name": "Michael Bolton"
+          }
+        }
+      }

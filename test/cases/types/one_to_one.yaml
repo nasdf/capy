@@ -5,10 +5,9 @@ schema: |
     child: Node
   }
 operations:
-  - params:
-      query: |
+  - query: |
         mutation {
-          createNode(data: {child: {value: 0}}) {
+          create_Node(data: {child: {value: 0}}) {
             child {
               value
             }
@@ -17,7 +16,7 @@ operations:
     response: |
       {
         "data": {
-          "createNode": {
+          "create_Node": {
             "child": {
               "value": 0
             }

@@ -2,6 +2,7 @@ package types
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/ipld/go-ipld-prime/schema"
 	"github.com/vektah/gqlparser/v2/ast"
@@ -63,13 +64,7 @@ func schemaTypeSystem(s *ast.Schema) (*schema.TypeSystem, []error) {
 		case ast.Object:
 			fields := make([]schema.StructField, len(d.Fields))
 			for i, f := range d.Fields {
-				var fieldType string
-				if f.Type.Elem != nil {
-					fieldType = fmt.Sprintf("[%s]", f.Type.Elem.String())
-				} else {
-					fieldType = f.Type.NamedType
-				}
-				fields[i] = schema.SpawnStructField(f.Name, fieldType, !f.Type.NonNull, !f.Type.NonNull)
+				fields[i] = schema.SpawnStructField(f.Name, strings.TrimSuffix(f.Type.String(), "!"), !f.Type.NonNull, !f.Type.NonNull)
 			}
 			types = append(types, schema.SpawnStruct(d.Name+DocumentSuffix, fields, schema.SpawnStructRepresentationMap(nil)))
 

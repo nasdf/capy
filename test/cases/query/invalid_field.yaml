@@ -4,10 +4,9 @@ schema: |
     name: String
   }
 operations:
-  - params:
-      query: |
+  - query: |
         query {
-          User {
+          list_User {
             invalid
           }
         }

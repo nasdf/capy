@@ -2,6 +2,7 @@ package graphql
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/nasdf/capy/node"
@@ -25,30 +26,42 @@ func (e *executionContext) executeQuery(ctx context.Context, set ast.SelectionSe
 		if err != nil {
 			return err
 		}
-		switch field.Name {
-		case "__typename":
+		switch {
+		case field.Name == "__typename":
 			err = va.AssignString("Query")
 			if err != nil {
 				return err
 			}
 
-		case "__type":
+		case field.Name == "__type":
 			err = e.introspectQueryType(field, va)
 			if err != nil {
 				return err
 			}
 
-		case "__schema":
+		case field.Name == "__schema":
 			err = e.introspectQuerySchema(field, va)
 			if err != nil {
 				return err
 			}
 
-		default:
-			err = e.queryCollection(ctx, field, va)
+		case strings.HasPrefix(field.Name, getOperationPrefix):
+			collection := strings.TrimPrefix(field.Name, getOperationPrefix)
+			args := field.ArgumentMap(e.params.Variables)
+			err = e.queryDocument(ctx, field, collection, args["id"].(string), va)
 			if err != nil {
 				return err
 			}
+
+		case strings.HasPrefix(field.Name, listOperationPrefix):
+			collection := strings.TrimPrefix(field.Name, listOperationPrefix)
+			err = e.queryCollection(ctx, field, collection, va)
+			if err != nil {
+				return err
+			}
+
+		default:
+			return fmt.Errorf("operation not supported %s", field.Name)
 		}
 	}
 	return ma.Finish()
@@ -72,21 +85,21 @@ func (e *executionContext) queryDocument(ctx context.Context, field graphql.Coll
 	return e.queryField(ctx, linkNode.(schema.TypedNode), field, na)
 }
 
-func (e *executionContext) queryCollection(ctx context.Context, field graphql.CollectedField, na datamodel.NodeAssembler) error {
+func (e *executionContext) queryCollection(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) error {
 	rootLink := ctx.Value(rootContextKey).(datamodel.Link)
 	rootNode, err := e.store.Load(ctx, rootLink, e.system.Prototype(types.RootTypeName))
 	if err != nil {
 		return err
 	}
-	collection, err := rootNode.LookupByString(field.Name)
+	collectionNode, err := rootNode.LookupByString(collection)
 	if err != nil {
 		return err
 	}
-	la, err := na.BeginList(collection.Length())
+	la, err := na.BeginList(collectionNode.Length())
 	if err != nil {
 		return err
 	}
-	iter := collection.MapIterator()
+	iter := collectionNode.MapIterator()
 	for !iter.Done() {
 		k, v, err := iter.Next()
 		if err != nil {

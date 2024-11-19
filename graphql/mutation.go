@@ -14,8 +14,6 @@ import (
 	"github.com/vektah/gqlparser/v2/gqlerror"
 )
 
-const createMutationPrefix = "create"
-
 func (e *executionContext) executeMutation(ctx context.Context, set ast.SelectionSet, na datamodel.NodeAssembler) error {
 	rootLink := ctx.Value(rootContextKey).(datamodel.Link)
 	fields := e.collectFields(set, "Mutation")
@@ -30,8 +28,8 @@ func (e *executionContext) executeMutation(ctx context.Context, set ast.Selectio
 			return err
 		}
 		switch {
-		case strings.HasPrefix(field.Name, createMutationPrefix):
-			collection := strings.TrimPrefix(field.Name, createMutationPrefix)
+		case strings.HasPrefix(field.Name, createOperationPrefix):
+			collection := strings.TrimPrefix(field.Name, createOperationPrefix)
 			lnk, err := e.createMutation(ctx, field, collection, va)
 			if err != nil {
 				return err

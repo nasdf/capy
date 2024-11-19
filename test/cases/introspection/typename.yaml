@@ -4,17 +4,16 @@ schema: |
     title: String
   }
 operations:
-  - params:
-      query: |
+  - query: |
         mutation {
-          createFilm(data: {title: "Hackers"}) {
+          create_Film(data: {title: "Hackers"}) {
             __typename
           }
         }
     response: |
       {
         "data": {
-          "createFilm": {
+          "create_Film": {
             "__typename": "Film"
           }
         }

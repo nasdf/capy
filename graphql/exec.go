@@ -22,6 +22,12 @@ var (
 	linkContextKey = contextKey("link")
 )
 
+const (
+	createOperationPrefix = "create_"
+	listOperationPrefix   = "list_"
+	getOperationPrefix    = "get_"
+)
+
 // QueryParams contains all of the parameters for a query.
 type QueryParams struct {
 	Query         string         `json:"query"`

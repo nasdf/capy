@@ -4,17 +4,16 @@ schema: |
     results: [Int]
   }
 operations:
-  - params:
-      query: |
-        mutation {
-          createRecord(data: {results: [0, 1, 2, 3]}) {
-            results
-          }
+  - query: |
+      mutation {
+        create_Record(data: {results: [0, 1, 2, 3]}) {
+          results
         }
+      }
     response: |
       {
         "data": {
-          "createRecord": {
+          "create_Record": {
             "results": [0, 1, 2, 3]
           }
         }

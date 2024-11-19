@@ -1,0 +1,41 @@
+# This test ensures that setting a relation by id works
+schema: |
+  type Node {
+    value: Int
+    child: Node
+  }
+operations:
+  - query: |
+        mutation {
+          create_Node(data: {value: 1}) {
+            value
+          }
+        }
+    response: |
+      {
+        "data": {
+          "create_Node": {
+            "value": 1
+          }
+        }
+      }
+  - query: |
+        mutation {
+          create_Node(data: {value: 0, child: {_id: "{{index .Node.Keys 0}}"}}) {
+            value
+            child {
+              value
+            }
+          }
+        }
+    response: |
+      {
+        "data": {
+          "create_Node": {
+            "value": 0,
+            "child": {
+              "value": 1
+            }
+          }
+        }
+      }

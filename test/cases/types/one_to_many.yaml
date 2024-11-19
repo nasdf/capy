@@ -5,19 +5,18 @@ schema: |
     children: [Node]
   }
 operations:
-  - params:
-      query: |
-        mutation {
-          createNode(data: {children: [{value: 0}, {value: 1}]}) {
-            children {
-              value
-            }
+  - query: |
+      mutation {
+        create_Node(data: {children: [{value: 0}, {value: 1}]}) {
+          children {
+            value
           }
         }
+      }
     response: |
       {
         "data": {
-          "createNode": {
+          "create_Node": {
             "children": [{"value": 0}, {"value": 1}]
           }
         }

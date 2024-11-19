@@ -38,7 +38,8 @@ input {{$name}}CreateInput {
 type Query {
 {{- range $name, $type := .Types}}
     {{- if and (eq $type.Kind "OBJECT") (not $type.BuiltIn)}}
-    {{$name}}: [{{$name}}]
+    list_{{$name}}: [{{$name}}]
+    get_{{$name}}(id: ID!): {{$name}}
     {{- end}}
 {{- end}}
 }
@@ -46,7 +47,7 @@ type Query {
 type Mutation {
 {{- range $name, $type := .Types}}
     {{- if and (eq $type.Kind "OBJECT") (not $type.BuiltIn)}}
-    create{{$name}}(data: {{$name}}CreateInput): {{$name}}
+    create_{{$name}}(data: {{$name}}CreateInput): {{$name}}
     {{- end}}
 {{- end}}
 }
