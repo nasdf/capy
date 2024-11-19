@@ -78,3 +78,8 @@ func (s *Store) SetNode(ctx context.Context, path datamodel.Path, node datamodel
 	}
 	return s.Traversal(ctx).FocusedTransform(node, path, fn, true)
 }
+
+// LinkSystem returns the link system used to store and load data.
+func (s *Store) LinkSystem() *linking.LinkSystem {
+	return &s.links
+}

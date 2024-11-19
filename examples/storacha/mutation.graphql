@@ -1,5 +1,5 @@
 mutation {
-	createFilm(input: {
+	create_Film(data: {
 		title: "Beetlejuice", 
 		director: {name: "Tim Burton"}, 
 		actors: [{name: "Michael Keaton"}, {name: "Winona Ryder"}]

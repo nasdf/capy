@@ -21,15 +21,15 @@ import (
 var schema string
 
 func main() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := context.Background()
+	store := core.Open(storage.NewMemory())
 
 	address := "localhost:8080"
 	if len(os.Args) >= 2 {
 		address = os.Args[1]
 	}
 
-	db, err := capy.New(ctx, core.Open(storage.NewMemory()), schema)
+	db, err := capy.New(ctx, store, schema)
 	if err != nil {
 		panic(err)
 	}
