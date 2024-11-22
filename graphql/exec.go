@@ -24,8 +24,9 @@ var (
 
 const (
 	createOperationPrefix = "create_"
+	deleteOperationPrefix = "delete_"
 	listOperationPrefix   = "list_"
-	getOperationPrefix    = "get_"
+	findOperationPrefix   = "find_"
 )
 
 // QueryParams contains all of the parameters for a query.

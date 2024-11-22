@@ -20,14 +20,14 @@ operations:
       }
   - query: |
         query {
-          get_User(id: "{{index .User.Keys 0}}") {
+          find_User(id: "{{index .User.Keys 0}}") {
             name
           }
         }
     response: |
       {
         "data": {
-          "get_User": {
+          "find_User": {
             "name": "Michael Bolton"
           }
         }

@@ -45,8 +45,8 @@ func (e *executionContext) executeQuery(ctx context.Context, set ast.SelectionSe
 				return err
 			}
 
-		case strings.HasPrefix(field.Name, getOperationPrefix):
-			collection := strings.TrimPrefix(field.Name, getOperationPrefix)
+		case strings.HasPrefix(field.Name, findOperationPrefix):
+			collection := strings.TrimPrefix(field.Name, findOperationPrefix)
 			args := field.ArgumentMap(e.params.Variables)
 			err = e.queryDocument(ctx, field, collection, args["id"].(string), va)
 			if err != nil {
@@ -100,7 +100,6 @@ func (e *executionContext) queryCollection(ctx context.Context, field graphql.Co
 		return err
 	}
 	args := field.ArgumentMap(e.params.Variables)
-	filter := args["filter"].(map[string]any)
 	iter := collectionNode.MapIterator()
 	for !iter.Done() {
 		k, v, err := iter.Next()
@@ -113,7 +112,7 @@ func (e *executionContext) queryCollection(ctx context.Context, field graphql.Co
 			return err
 		}
 		ctx = context.WithValue(ctx, idContextKey, key)
-		match, err := e.filterNode(ctx, val, filter)
+		match, err := e.filterNode(ctx, val, args["filter"])
 		if err != nil {
 			return err
 		}

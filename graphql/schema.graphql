@@ -78,13 +78,13 @@ type Query {
 {{- range $name, $type := .Types}}
     {{- if and (eq $type.Kind "OBJECT") (not $type.BuiltIn)}}
     """
-    List and filter {{$name}} documents.
+    List {{$name}} documents.
     """
     list_{{$name}}(filter: {{$name}}FilterInput): [{{$name}}]
     """
-    Find a {{$name}} document by id.
+    Find a {{$name}} document.
     """
-    get_{{$name}}(id: ID!): {{$name}}
+    find_{{$name}}(id: ID!): {{$name}}
     {{- end}}
 {{- end}}
 }
@@ -96,6 +96,10 @@ type Mutation {
     Create a {{$name}} document.
     """
     create_{{$name}}(data: {{$name}}CreateInput): {{$name}}
+    """
+    Delete {{$name}} documents.
+    """
+    delete_{{$name}}(filter: {{$name}}FilterInput): [{{$name}}]
     {{- end}}
 {{- end}}
 }

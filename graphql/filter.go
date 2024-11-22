@@ -29,7 +29,10 @@ const (
 	noneFilter           = "_none"
 )
 
-func (e *executionContext) filterNode(ctx context.Context, n schema.TypedNode, f map[string]any) (bool, error) {
+func (e *executionContext) filterNode(ctx context.Context, n schema.TypedNode, f any) (bool, error) {
+	if f == nil {
+		return true, nil
+	}
 	if n.Kind() == datamodel.Kind_Link {
 		return e.filterLink(ctx, n, f)
 	}
@@ -40,7 +43,7 @@ func (e *executionContext) filterNode(ctx context.Context, n schema.TypedNode, f
 		}
 		return e.filterDocument(ctx, n.Type().Name(), id, f)
 	}
-	for key, val := range f {
+	for key, val := range f.(map[string]any) {
 		switch key {
 		case equalFilter:
 			match, err := filterEqual(n, val)
@@ -83,32 +86,32 @@ func (e *executionContext) filterNode(ctx context.Context, n schema.TypedNode, f
 				return false, err
 			}
 		case andFilter:
-			match, err := e.filterAnd(ctx, n, val.([]any))
+			match, err := e.filterAnd(ctx, n, val)
 			if err != nil || !match {
 				return false, err
 			}
 		case orFilter:
-			match, err := e.filterOr(ctx, n, val.([]any))
+			match, err := e.filterOr(ctx, n, val)
 			if err != nil || !match {
 				return false, err
 			}
 		case notFilter:
-			match, err := e.filterNode(ctx, n, val.(map[string]any))
+			match, err := e.filterNode(ctx, n, val)
 			if err != nil || match {
 				return false, err
 			}
 		case allFilter:
-			match, err := e.filterAll(ctx, n, val.(map[string]any))
+			match, err := e.filterAll(ctx, n, val)
 			if err != nil || !match {
 				return false, err
 			}
 		case anyFilter:
-			match, err := e.filterAny(ctx, n, val.(map[string]any))
+			match, err := e.filterAny(ctx, n, val)
 			if err != nil || !match {
 				return false, err
 			}
 		case noneFilter:
-			match, err := e.filterAny(ctx, n, val.(map[string]any))
+			match, err := e.filterAny(ctx, n, val)
 			if err != nil || match {
 				return false, err
 			}
@@ -117,7 +120,7 @@ func (e *executionContext) filterNode(ctx context.Context, n schema.TypedNode, f
 			if err != nil {
 				return false, err
 			}
-			match, err := e.filterNode(ctx, field.(schema.TypedNode), val.(map[string]any))
+			match, err := e.filterNode(ctx, field.(schema.TypedNode), val)
 			if err != nil || !match {
 				return false, err
 			}
@@ -126,7 +129,7 @@ func (e *executionContext) filterNode(ctx context.Context, n schema.TypedNode, f
 	return true, nil
 }
 
-func (e *executionContext) filterDocument(ctx context.Context, collection string, id string, f map[string]any) (bool, error) {
+func (e *executionContext) filterDocument(ctx context.Context, collection string, id string, f any) (bool, error) {
 	rootLink := ctx.Value(rootContextKey).(datamodel.Link)
 	rootNode, err := e.store.Load(ctx, rootLink, e.system.Prototype(types.RootTypeName))
 	if err != nil {
@@ -144,7 +147,7 @@ func (e *executionContext) filterDocument(ctx context.Context, collection string
 	return e.filterNode(ctx, linkNode.(schema.TypedNode), f)
 }
 
-func (e *executionContext) filterLink(ctx context.Context, n schema.TypedNode, f map[string]any) (bool, error) {
+func (e *executionContext) filterLink(ctx context.Context, n schema.TypedNode, f any) (bool, error) {
 	lnk, err := n.AsLink()
 	if err != nil {
 		return false, err
@@ -157,7 +160,7 @@ func (e *executionContext) filterLink(ctx context.Context, n schema.TypedNode, f
 	return e.filterNode(ctx, obj.(schema.TypedNode), f)
 }
 
-func (e *executionContext) filterAll(ctx context.Context, n schema.TypedNode, f map[string]any) (bool, error) {
+func (e *executionContext) filterAll(ctx context.Context, n schema.TypedNode, f any) (bool, error) {
 	iter := n.ListIterator()
 	for !iter.Done() {
 		_, v, err := iter.Next()
@@ -172,7 +175,7 @@ func (e *executionContext) filterAll(ctx context.Context, n schema.TypedNode, f 
 	return true, nil
 }
 
-func (e *executionContext) filterAny(ctx context.Context, n schema.TypedNode, f map[string]any) (bool, error) {
+func (e *executionContext) filterAny(ctx context.Context, n schema.TypedNode, f any) (bool, error) {
 	iter := n.ListIterator()
 	for !iter.Done() {
 		_, v, err := iter.Next()
@@ -187,8 +190,11 @@ func (e *executionContext) filterAny(ctx context.Context, n schema.TypedNode, f 
 	return false, nil
 }
 
-func (e *executionContext) filterAnd(ctx context.Context, n schema.TypedNode, f []any) (bool, error) {
-	for _, v := range f {
+func (e *executionContext) filterAnd(ctx context.Context, n schema.TypedNode, f any) (bool, error) {
+	if f == nil {
+		return true, nil
+	}
+	for _, v := range f.([]any) {
 		match, err := e.filterNode(ctx, n, v.(map[string]any))
 		if err != nil || !match {
 			return false, err
@@ -197,8 +203,11 @@ func (e *executionContext) filterAnd(ctx context.Context, n schema.TypedNode, f 
 	return true, nil
 }
 
-func (e *executionContext) filterOr(ctx context.Context, n schema.TypedNode, f []any) (bool, error) {
-	for _, v := range f {
+func (e *executionContext) filterOr(ctx context.Context, n schema.TypedNode, f any) (bool, error) {
+	if f == nil {
+		return true, nil
+	}
+	for _, v := range f.([]any) {
 		match, err := e.filterNode(ctx, n, v.(map[string]any))
 		if err != nil || match {
 			return match, err

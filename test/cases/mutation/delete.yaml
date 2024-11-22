@@ -1,0 +1,48 @@
+# This test ensures that delete works correctly
+schema: |
+  type Film {
+    title: String
+  }
+operations:
+  - query: |
+        mutation {
+          create_Film(data: {title: "Hackers"}) {
+            title
+          }
+        }
+    response: |
+      {
+        "data": {
+          "create_Film": {
+            "title": "Hackers"
+          }
+        }
+      }
+  - query: |
+        mutation {
+          delete_Film(filter: {title: {_eq: "Hackers"}}) {
+            title
+          }
+        }
+    response: |
+      {
+        "data": {
+          "delete_Film": [
+            {
+              "title": "Hackers"
+            }
+          ]
+        }
+      }
+  - query: |
+        query {
+          list_Film {
+            title
+          }
+        }
+    response: |
+      {
+        "data": {
+          "list_Film": []
+        }
+      }
