@@ -1,0 +1,37 @@
+# This test ensures that get operations work as expected
+schema: |
+  type User {
+    name: String
+    pass: String
+  }
+operations:
+  - query: |
+        mutation {
+          create_User(data: {name: "Michael Bolton", pass: "secret"}) {
+            name
+          }
+        }
+    response: |
+      {
+        "data": {
+          "create_User": {
+            "name": "Michael Bolton"
+          }
+        }
+      }
+  - query: |
+        query {
+          list_User(filter: {_and: [{name: {_eq: "Michael Bolton"}}, {pass: {_eq: "secret"}}]}) {
+            name
+          }
+        }
+    response: |
+      {
+        "data": {
+          "list_User": [
+            {
+              "name": "Michael Bolton"
+            }
+          ]
+        }
+      }

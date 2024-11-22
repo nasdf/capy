@@ -1,0 +1,218 @@
+input IDFilterInput {
+    """
+    Matches if the field is equal to the value.
+    """
+    _eq: ID
+    """
+    Matches if the field is not equal to the value.
+    """
+    _neq: ID
+    """
+    Matches if the field is included in the list.
+    """
+    _in: [ID]
+    """
+    Matches if the field is not included in the list.
+    """
+    _nin: [ID]
+}
+
+"""
+Input for filtering String fields.
+"""
+input StringFilterInput {
+    """
+    Matches if the field is equal to the value.
+    """
+    _eq: String
+    """
+    Matches if the field is not equal to the value.
+    """
+    _neq: String
+    """
+    Matches if the field is greater than the value.
+    """
+    _gt: String
+    """
+    Matches if the field is greater than or equal to the value.
+    """
+    _gte: String
+    """
+    Matches if the field is less than the value.
+    """
+    _lt: String
+    """
+    Matches if the field is less than or equal to the value.
+    """
+    _lte: String
+    """
+    Matches if the field is included in the list.
+    """
+    _in: [String]
+    """
+    Matches if the field is not included in the list.
+    """
+    _nin: [String]
+}
+
+"""
+Input for filtering Float fields.
+"""
+input FloatFilterInput {
+    """
+    Matches if the field is equal to the value.
+    """
+    _eq: Float
+    """
+    Matches if the field is not equal to the value.
+    """
+    _neq: Float
+    """
+    Matches if the field is greater than the value.
+    """
+    _gt: Float
+    """
+    Matches if the field is greater than or equal to the value.
+    """
+    _gte: Float
+    """
+    Matches if the field is less than the value.
+    """
+    _lt: Float
+    """
+    Matches if the field is less than or equal to the value.
+    """
+    _lte: Float
+    """
+    Matches if the field is included in the list.
+    """
+    _in: [Float]
+    """
+    Matches if the field is not included in the list.
+    """
+    _nin: [Float]
+}
+
+"""
+Input for filtering Int fields.
+"""
+input IntFilterInput {
+    """
+    Matches if the field is equal to the value.
+    """
+    _eq: Int
+    """
+    Matches if the field is not equal to the value.
+    """
+    _neq: Int
+    """
+    Matches if the field is greater than the value.
+    """
+    _gt: Int
+    """
+    Matches if the field is greater than or equal to the value.
+    """
+    _gte: Int
+    """
+    Matches if the field is less than the value.
+    """
+    _lt: Int
+    """
+    Matches if the field is less than or equal to the value.
+    """
+    _lte: Int
+    """
+    Matches if the field is included in the list.
+    """
+    _in: [Int]
+    """
+    Matches if the field is not included in the list.
+    """
+    _nin: [Int]
+}
+
+"""
+Input for filtering Boolean fields.
+"""
+input BooleanFilterInput {
+    """
+    Matches if the field is equal to the value.
+    """
+    _eq: Boolean
+    """
+    Matches if the field is not equal to the value.
+    """
+    _neq: Boolean
+}
+
+"""
+Input for filtering String list fields.
+"""
+input StringListFilterInput {
+    """
+    Matches if all field values match.
+    """
+    _all: [StringFilterInput!]
+    """
+    Matches if any field values match.
+    """
+    _any: [StringFilterInput!]
+    """
+    Matches if no field values match.
+    """
+    _none: [StringFilterInput!]
+}
+
+"""
+Input for filtering Float list fields.
+"""
+input FloatListFilterInput {
+    """
+    Matches if all field values match.
+    """
+    _all: [FloatFilterInput!]
+    """
+    Matches if any field values match.
+    """
+    _any: [FloatFilterInput!]
+    """
+    Matches if no field values match.
+    """
+    _none: [FloatFilterInput!]
+}
+
+"""
+Input for filtering Int list fields.
+"""
+input IntListFilterInput {
+    """
+    Matches if all field values match.
+    """
+    _all: [IntFilterInput!]
+    """
+    Matches if any field values match.
+    """
+    _any: [IntFilterInput!]
+    """
+    Matches if no field values match.
+    """
+    _none: [IntFilterInput!]
+}
+
+"""
+Input for filtering Boolean list fields.
+"""
+input BooleanListFilterInput {
+    """
+    Matches if all field values match.
+    """
+    _all: [BooleanFilterInput!]
+    """
+    Matches if any field values match.
+    """
+    _any: [BooleanFilterInput!]
+    """
+    Matches if no field values match.
+    """
+    _none: [BooleanFilterInput!]
+}

@@ -14,6 +14,49 @@ extend type {{$name}} {
 }
 
 """
+Input for filtering {{$name}} document lists.
+"""
+input {{$name}}ListFilterInput {
+    """
+    Matches if all field values match.
+    """
+    _all: [{{$name}}FilterInput!]
+    """
+    Matches if any field values match.
+    """
+    _any: [{{$name}}FilterInput!]
+    """
+    Matches if no field values match.
+    """
+    _none: [{{$name}}FilterInput!]
+}
+
+"""
+Input for filtering {{$name}} documents.
+"""
+input {{$name}}FilterInput {
+    """
+    Matches if all filters match.
+    """
+    _and: [{{$name}}FilterInput!]
+    """
+    Matches if one filter matches.
+    """
+    _or: [{{$name}}FilterInput!]
+    """
+    Matches if the filter does not match.
+    """
+    _not: {{$name}}FilterInput
+{{- range $field := .Fields}}
+    {{- if $field.Type.Elem}}
+    {{$field.Name}}: {{$field.Type.Elem.Name}}ListFilterInput
+    {{- else}}
+    {{$field.Name}}: {{$field.Type.Name}}FilterInput
+    {{- end}}
+{{- end}}
+}
+
+"""
 Input for creating {{$name}} documents.
 """
 input {{$name}}CreateInput {
@@ -22,12 +65,8 @@ input {{$name}}CreateInput {
     {{$def := index $.Types $field.Type.Name}}
     {{- if $def.IsLeafType}}
     {{$field.Name}}: {{$field.Type.String}}
-    {{- else if and $field.Type.Elem $field.Type.NonNull}}
-    {{$field.Name}}: [{{$field.Type.Name}}CreateInput!]
     {{- else if $field.Type.Elem}}
-    {{$field.Name}}: [{{$field.Type.Name}}CreateInput]
-    {{- else if $field.Type.NonNull}}
-    {{$field.Name}}: {{$field.Type.Name}}CreateInput!
+    {{$field.Name}}: [{{$field.Type.Name}}CreateInput!]
     {{- else}}
     {{$field.Name}}: {{$field.Type.Name}}CreateInput
     {{- end}}
@@ -38,7 +77,13 @@ input {{$name}}CreateInput {
 type Query {
 {{- range $name, $type := .Types}}
     {{- if and (eq $type.Kind "OBJECT") (not $type.BuiltIn)}}
-    list_{{$name}}: [{{$name}}]
+    """
+    List and filter {{$name}} documents.
+    """
+    list_{{$name}}(filter: {{$name}}FilterInput): [{{$name}}]
+    """
+    Find a {{$name}} document by id.
+    """
     get_{{$name}}(id: ID!): {{$name}}
     {{- end}}
 {{- end}}
@@ -47,6 +92,9 @@ type Query {
 type Mutation {
 {{- range $name, $type := .Types}}
     {{- if and (eq $type.Kind "OBJECT") (not $type.BuiltIn)}}
+    """
+    Create a {{$name}} document.
+    """
     create_{{$name}}(data: {{$name}}CreateInput): {{$name}}
     {{- end}}
 {{- end}}

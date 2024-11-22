@@ -12,6 +12,9 @@ import (
 //go:embed schema.graphql
 var schemaTemplateSource string
 
+//go:embed prelude.graphql
+var preludeSource string
+
 // GenerateSchema creates a GraphQL schema from the given IPLD schema.TypeSystem.
 func GenerateSchema(input string) (*ast.Schema, error) {
 	inputSource := ast.Source{Input: input}
@@ -27,6 +30,7 @@ func GenerateSchema(input string) (*ast.Schema, error) {
 	if err := schemaTemplate.Execute(&out, inputSchema); err != nil {
 		return nil, err
 	}
+	preludeSource := ast.Source{Input: preludeSource}
 	outputSource := ast.Source{Input: out.String()}
-	return gqlparser.LoadSchema(&inputSource, &outputSource)
+	return gqlparser.LoadSchema(&preludeSource, &inputSource, &outputSource)
 }

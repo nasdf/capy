@@ -82,7 +82,7 @@ func (e *executionContext) queryDocument(ctx context.Context, field graphql.Coll
 		return err
 	}
 	ctx = context.WithValue(ctx, idContextKey, id)
-	return e.queryField(ctx, linkNode.(schema.TypedNode), field, na)
+	return e.queryNode(ctx, linkNode.(schema.TypedNode), field, na)
 }
 
 func (e *executionContext) queryCollection(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) error {
@@ -99,18 +99,28 @@ func (e *executionContext) queryCollection(ctx context.Context, field graphql.Co
 	if err != nil {
 		return err
 	}
+	args := field.ArgumentMap(e.params.Variables)
+	filter := args["filter"].(map[string]any)
 	iter := collectionNode.MapIterator()
 	for !iter.Done() {
 		k, v, err := iter.Next()
 		if err != nil {
 			return err
 		}
-		id, err := k.AsString()
+		val := v.(schema.TypedNode)
+		key, err := k.AsString()
 		if err != nil {
 			return err
 		}
-		ctx = context.WithValue(ctx, idContextKey, id)
-		err = e.queryField(ctx, v.(schema.TypedNode), field, la.AssembleValue())
+		ctx = context.WithValue(ctx, idContextKey, key)
+		match, err := e.filterNode(ctx, val, filter)
+		if err != nil {
+			return err
+		}
+		if !match {
+			continue
+		}
+		err = e.queryNode(ctx, val, field, la.AssembleValue())
 		if err != nil {
 			return err
 		}
@@ -118,7 +128,7 @@ func (e *executionContext) queryCollection(ctx context.Context, field graphql.Co
 	return la.Finish()
 }
 
-func (e *executionContext) queryField(ctx context.Context, n schema.TypedNode, field graphql.CollectedField, na datamodel.NodeAssembler) error {
+func (e *executionContext) queryNode(ctx context.Context, n schema.TypedNode, field graphql.CollectedField, na datamodel.NodeAssembler) error {
 	if len(field.SelectionSet) == 0 {
 		return na.AssignNode(n)
 	}
@@ -153,7 +163,7 @@ func (e *executionContext) queryLink(ctx context.Context, n schema.TypedNode, fi
 		return err
 	}
 	ctx = context.WithValue(ctx, linkContextKey, lnk.String())
-	return e.queryField(ctx, obj.(schema.TypedNode), field, na)
+	return e.queryNode(ctx, obj.(schema.TypedNode), field, na)
 }
 
 func (e *executionContext) queryList(ctx context.Context, n schema.TypedNode, field graphql.CollectedField, na datamodel.NodeAssembler) error {
@@ -167,7 +177,7 @@ func (e *executionContext) queryList(ctx context.Context, n schema.TypedNode, fi
 		if err != nil {
 			return err
 		}
-		err = e.queryField(ctx, obj.(schema.TypedNode), field, la.AssembleValue())
+		err = e.queryNode(ctx, obj.(schema.TypedNode), field, la.AssembleValue())
 		if err != nil {
 			return err
 		}
@@ -176,7 +186,8 @@ func (e *executionContext) queryList(ctx context.Context, n schema.TypedNode, fi
 }
 
 func (e *executionContext) queryMap(ctx context.Context, n schema.TypedNode, field graphql.CollectedField, na datamodel.NodeAssembler) error {
-	fields := e.collectFields(field.SelectionSet)
+	typeName := strings.TrimSuffix(n.Type().Name(), types.DocumentSuffix)
+	fields := e.collectFields(field.SelectionSet, typeName)
 	ma, err := na.BeginMap(int64(len(fields)))
 	if err != nil {
 		return err
@@ -194,7 +205,7 @@ func (e *executionContext) queryMap(ctx context.Context, n schema.TypedNode, fie
 			}
 
 		case "__typename":
-			err = va.AssignString(strings.TrimSuffix(n.Type().Name(), types.DocumentSuffix))
+			err = va.AssignString(typeName)
 			if err != nil {
 				return err
 			}
@@ -210,7 +221,7 @@ func (e *executionContext) queryMap(ctx context.Context, n schema.TypedNode, fie
 			if err != nil {
 				return err
 			}
-			err = e.queryField(ctx, obj.(schema.TypedNode), field, va)
+			err = e.queryNode(ctx, obj.(schema.TypedNode), field, va)
 			if err != nil {
 				return err
 			}
