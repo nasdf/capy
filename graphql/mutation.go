@@ -133,16 +133,16 @@ func (e *executionContext) deleteMutation(ctx context.Context, field graphql.Col
 			return nil, err
 		}
 	}
+	err = la.Finish()
+	if err != nil {
+		return nil, err
+	}
 	rootPath := datamodel.ParsePath(types.RootParentsFieldName).AppendSegmentString("-")
 	rootNode, err = e.store.SetNode(ctx, rootPath, rootNode, basicnode.NewLink(rootLink))
 	if err != nil {
 		return nil, err
 	}
 	rootLink, err = e.store.Store(ctx, rootNode)
-	if err != nil {
-		return nil, err
-	}
-	err = la.Finish()
 	if err != nil {
 		return nil, err
 	}

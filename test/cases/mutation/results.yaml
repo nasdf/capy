@@ -6,28 +6,28 @@ schema: |
 operations:
   - query: |
         mutation {
-          create_Film(data: {title: "Hackers"}) {
+          createFilm(data: {title: "Hackers"}) {
             title
           }
         }
     response: |
       {
         "data": {
-          "create_Film": {
+          "createFilm": {
             "title": "Hackers"
           }
         }
       }
   - query: |
         mutation {
-          create_Film(data: {title: "Idiocracy"}) {
+          createFilm(data: {title: "Idiocracy"}) {
             title
           }
         }
     response: |
       {
         "data": {
-          "create_Film": {
+          "createFilm": {
             "title": "Idiocracy"
           }
         }

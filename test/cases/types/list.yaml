@@ -6,14 +6,14 @@ schema: |
 operations:
   - query: |
       mutation {
-        create_Record(data: {results: [0, 1, 2, 3]}) {
+        createRecord(data: {results: [0, 1, 2, 3]}) {
           results
         }
       }
     response: |
       {
         "data": {
-          "create_Record": {
+          "createRecord": {
             "results": [0, 1, 2, 3]
           }
         }

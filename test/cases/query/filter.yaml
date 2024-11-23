@@ -7,28 +7,28 @@ schema: |
 operations:
   - query: |
         mutation {
-          create_User(data: {name: "Michael Bolton", pass: "secret"}) {
+          createUser(data: {name: "Michael Bolton", pass: "secret"}) {
             name
           }
         }
     response: |
       {
         "data": {
-          "create_User": {
+          "createUser": {
             "name": "Michael Bolton"
           }
         }
       }
   - query: |
         query {
-          list_User(filter: {_and: [{name: {_eq: "Michael Bolton"}}, {pass: {_eq: "secret"}}]}) {
+          listUser(filter: {and: [{name: {eq: "Michael Bolton"}}, {pass: {eq: "secret"}}]}) {
             name
           }
         }
     response: |
       {
         "data": {
-          "list_User": [
+          "listUser": [
             {
               "name": "Michael Bolton"
             }

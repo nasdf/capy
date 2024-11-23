@@ -6,28 +6,28 @@ schema: |
 operations:
   - query: |
         mutation {
-          create_Film(data: {title: "Hackers"}) {
+          createFilm(data: {title: "Hackers"}) {
             title
           }
         }
     response: |
       {
         "data": {
-          "create_Film": {
+          "createFilm": {
             "title": "Hackers"
           }
         }
       }
   - query: |
         mutation {
-          delete_Film(filter: {title: {_eq: "Hackers"}}) {
+          deleteFilm(filter: {title: {eq: "Hackers"}}) {
             title
           }
         }
     response: |
       {
         "data": {
-          "delete_Film": [
+          "deleteFilm": [
             {
               "title": "Hackers"
             }
@@ -36,13 +36,13 @@ operations:
       }
   - query: |
         query {
-          list_Film {
+          listFilm {
             title
           }
         }
     response: |
       {
         "data": {
-          "list_Film": []
+          "listFilm": []
         }
       }

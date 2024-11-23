@@ -1,20 +1,23 @@
+"""
+Input for filtering ID fields.
+"""
 input IDFilterInput {
     """
     Matches if the field is equal to the value.
     """
-    _eq: ID
+    eq: ID
     """
     Matches if the field is not equal to the value.
     """
-    _neq: ID
+    neq: ID
     """
     Matches if the field is included in the list.
     """
-    _in: [ID]
+    in: [ID]
     """
     Matches if the field is not included in the list.
     """
-    _nin: [ID]
+    nin: [ID]
 }
 
 """
@@ -24,35 +27,35 @@ input StringFilterInput {
     """
     Matches if the field is equal to the value.
     """
-    _eq: String
+    eq: String
     """
     Matches if the field is not equal to the value.
     """
-    _neq: String
+    neq: String
     """
     Matches if the field is greater than the value.
     """
-    _gt: String
+    gt: String
     """
     Matches if the field is greater than or equal to the value.
     """
-    _gte: String
+    gte: String
     """
     Matches if the field is less than the value.
     """
-    _lt: String
+    lt: String
     """
     Matches if the field is less than or equal to the value.
     """
-    _lte: String
+    lte: String
     """
     Matches if the field is included in the list.
     """
-    _in: [String]
+    in: [String]
     """
     Matches if the field is not included in the list.
     """
-    _nin: [String]
+    nin: [String]
 }
 
 """
@@ -62,35 +65,35 @@ input FloatFilterInput {
     """
     Matches if the field is equal to the value.
     """
-    _eq: Float
+    eq: Float
     """
     Matches if the field is not equal to the value.
     """
-    _neq: Float
+    neq: Float
     """
     Matches if the field is greater than the value.
     """
-    _gt: Float
+    gt: Float
     """
     Matches if the field is greater than or equal to the value.
     """
-    _gte: Float
+    gte: Float
     """
     Matches if the field is less than the value.
     """
-    _lt: Float
+    lt: Float
     """
     Matches if the field is less than or equal to the value.
     """
-    _lte: Float
+    lte: Float
     """
     Matches if the field is included in the list.
     """
-    _in: [Float]
+    in: [Float]
     """
     Matches if the field is not included in the list.
     """
-    _nin: [Float]
+    nin: [Float]
 }
 
 """
@@ -100,35 +103,35 @@ input IntFilterInput {
     """
     Matches if the field is equal to the value.
     """
-    _eq: Int
+    eq: Int
     """
     Matches if the field is not equal to the value.
     """
-    _neq: Int
+    neq: Int
     """
     Matches if the field is greater than the value.
     """
-    _gt: Int
+    gt: Int
     """
     Matches if the field is greater than or equal to the value.
     """
-    _gte: Int
+    gte: Int
     """
     Matches if the field is less than the value.
     """
-    _lt: Int
+    lt: Int
     """
     Matches if the field is less than or equal to the value.
     """
-    _lte: Int
+    lte: Int
     """
     Matches if the field is included in the list.
     """
-    _in: [Int]
+    in: [Int]
     """
     Matches if the field is not included in the list.
     """
-    _nin: [Int]
+    nin: [Int]
 }
 
 """
@@ -138,11 +141,11 @@ input BooleanFilterInput {
     """
     Matches if the field is equal to the value.
     """
-    _eq: Boolean
+    eq: Boolean
     """
     Matches if the field is not equal to the value.
     """
-    _neq: Boolean
+    neq: Boolean
 }
 
 """
@@ -152,15 +155,15 @@ input StringListFilterInput {
     """
     Matches if all field values match.
     """
-    _all: [StringFilterInput!]
+    all: [StringFilterInput!]
     """
     Matches if any field values match.
     """
-    _any: [StringFilterInput!]
+    any: [StringFilterInput!]
     """
     Matches if no field values match.
     """
-    _none: [StringFilterInput!]
+    none: [StringFilterInput!]
 }
 
 """
@@ -170,15 +173,15 @@ input FloatListFilterInput {
     """
     Matches if all field values match.
     """
-    _all: [FloatFilterInput!]
+    all: [FloatFilterInput!]
     """
     Matches if any field values match.
     """
-    _any: [FloatFilterInput!]
+    any: [FloatFilterInput!]
     """
     Matches if no field values match.
     """
-    _none: [FloatFilterInput!]
+    none: [FloatFilterInput!]
 }
 
 """
@@ -188,15 +191,15 @@ input IntListFilterInput {
     """
     Matches if all field values match.
     """
-    _all: [IntFilterInput!]
+    all: [IntFilterInput!]
     """
     Matches if any field values match.
     """
-    _any: [IntFilterInput!]
+    any: [IntFilterInput!]
     """
     Matches if no field values match.
     """
-    _none: [IntFilterInput!]
+    none: [IntFilterInput!]
 }
 
 """
@@ -206,13 +209,13 @@ input BooleanListFilterInput {
     """
     Matches if all field values match.
     """
-    _all: [BooleanFilterInput!]
+    all: [BooleanFilterInput!]
     """
     Matches if any field values match.
     """
-    _any: [BooleanFilterInput!]
+    any: [BooleanFilterInput!]
     """
     Matches if no field values match.
     """
-    _none: [BooleanFilterInput!]
+    none: [BooleanFilterInput!]
 }

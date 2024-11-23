@@ -13,20 +13,20 @@ import (
 )
 
 const (
-	equalFilter          = "_eq"
-	notEqualFilter       = "_neq"
-	greaterFilter        = "_gt"
-	greaterOrEqualFilter = "_gte"
-	lessFilter           = "_lt"
-	lessOrEqualFilter    = "_lte"
-	inFilter             = "_in"
-	notInFilter          = "_nin"
-	andFilter            = "_and"
-	orFilter             = "_or"
-	notFilter            = "_not"
-	allFilter            = "_all"
-	anyFilter            = "_any"
-	noneFilter           = "_none"
+	equalFilter          = "eq"
+	notEqualFilter       = "neq"
+	greaterFilter        = "gt"
+	greaterOrEqualFilter = "gte"
+	lessFilter           = "lt"
+	lessOrEqualFilter    = "lte"
+	inFilter             = "in"
+	notInFilter          = "nin"
+	andFilter            = "and"
+	orFilter             = "or"
+	notFilter            = "not"
+	allFilter            = "all"
+	anyFilter            = "any"
+	noneFilter           = "none"
 )
 
 func (e *executionContext) filterNode(ctx context.Context, n schema.TypedNode, f any) (bool, error) {

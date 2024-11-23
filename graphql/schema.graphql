@@ -20,15 +20,15 @@ input {{$name}}ListFilterInput {
     """
     Matches if all field values match.
     """
-    _all: [{{$name}}FilterInput!]
+    all: [{{$name}}FilterInput!]
     """
     Matches if any field values match.
     """
-    _any: [{{$name}}FilterInput!]
+    any: [{{$name}}FilterInput!]
     """
     Matches if no field values match.
     """
-    _none: [{{$name}}FilterInput!]
+    none: [{{$name}}FilterInput!]
 }
 
 """
@@ -38,15 +38,15 @@ input {{$name}}FilterInput {
     """
     Matches if all filters match.
     """
-    _and: [{{$name}}FilterInput!]
+    and: [{{$name}}FilterInput!]
     """
     Matches if one filter matches.
     """
-    _or: [{{$name}}FilterInput!]
+    or: [{{$name}}FilterInput!]
     """
     Matches if the filter does not match.
     """
-    _not: {{$name}}FilterInput
+    not: {{$name}}FilterInput
 {{- range $field := .Fields}}
     {{- if $field.Type.Elem}}
     {{$field.Name}}: {{$field.Type.Elem.Name}}ListFilterInput
@@ -80,11 +80,11 @@ type Query {
     """
     List {{$name}} documents.
     """
-    list_{{$name}}(filter: {{$name}}FilterInput): [{{$name}}]
+    list{{$name}}(filter: {{$name}}FilterInput): [{{$name}}]
     """
     Find a {{$name}} document.
     """
-    find_{{$name}}(id: ID!): {{$name}}
+    find{{$name}}(id: ID!): {{$name}}
     {{- end}}
 {{- end}}
 }
@@ -95,11 +95,11 @@ type Mutation {
     """
     Create a {{$name}} document.
     """
-    create_{{$name}}(data: {{$name}}CreateInput): {{$name}}
+    create{{$name}}(data: {{$name}}CreateInput): {{$name}}
     """
     Delete {{$name}} documents.
     """
-    delete_{{$name}}(filter: {{$name}}FilterInput): [{{$name}}]
+    delete{{$name}}(filter: {{$name}}FilterInput): [{{$name}}]
     {{- end}}
 {{- end}}
 }

@@ -23,10 +23,10 @@ var (
 )
 
 const (
-	createOperationPrefix = "create_"
-	deleteOperationPrefix = "delete_"
-	listOperationPrefix   = "list_"
-	findOperationPrefix   = "find_"
+	createOperationPrefix = "create"
+	deleteOperationPrefix = "delete"
+	listOperationPrefix   = "list"
+	findOperationPrefix   = "find"
 )
 
 // QueryParams contains all of the parameters for a query.

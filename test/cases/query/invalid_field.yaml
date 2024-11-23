@@ -6,7 +6,7 @@ schema: |
 operations:
   - query: |
         query {
-          list_User {
+          listUser {
             invalid
           }
         }

@@ -6,28 +6,28 @@ schema: |
 operations:
   - query: |
         mutation {
-          create_User(data: {name: "Michael Bolton"}) {
+          createUser(data: {name: "Michael Bolton"}) {
             name
           }
         }
     response: |
       {
         "data": {
-          "create_User": {
+          "createUser": {
             "name": "Michael Bolton"
           }
         }
       }
   - query: |
         query {
-          find_User(id: "{{index .User.Keys 0}}") {
+          findUser(id: "{{index .User.Keys 0}}") {
             name
           }
         }
     response: |
       {
         "data": {
-          "find_User": {
+          "findUser": {
             "name": "Michael Bolton"
           }
         }
