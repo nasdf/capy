@@ -1,4 +1,4 @@
-package graphql
+package node
 
 import (
 	"cmp"
@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/nasdf/capy/core"
+	"github.com/nasdf/capy/types"
+
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/schema"
-	"github.com/nasdf/capy/node"
-	"github.com/nasdf/capy/types"
 )
 
 const (
@@ -29,21 +30,75 @@ const (
 	noneFilter           = "none"
 )
 
-func (e *executionContext) filterNode(ctx context.Context, n schema.TypedNode, f any) (bool, error) {
-	if f == nil {
+// Filter is a set of operators used to match document fields.
+type Filter struct {
+	store  *core.Store
+	system *types.System
+	value  any
+}
+
+func NewFilter(store *core.Store, system *types.System, value any) *Filter {
+	return &Filter{
+		store:  store,
+		system: system,
+		value:  value,
+	}
+}
+
+func (f *Filter) Match(ctx context.Context, n schema.TypedNode) (bool, error) {
+	return f.matchDocument(ctx, n, f.value)
+}
+
+func (f *Filter) matchDocument(ctx context.Context, n schema.TypedNode, value any) (bool, error) {
+	if value == nil {
 		return true, nil
 	}
 	if n.Kind() == datamodel.Kind_Link {
-		return e.filterLink(ctx, n, f)
+		return f.matchLink(ctx, n, value)
 	}
-	if e.system.IsRelation(n.Type()) {
+	for key, val := range value.(map[string]any) {
+		switch key {
+		case andFilter:
+			match, err := f.matchAnd(ctx, n, val)
+			if err != nil || !match {
+				return false, err
+			}
+		case orFilter:
+			match, err := f.matchOr(ctx, n, val)
+			if err != nil || !match {
+				return false, err
+			}
+		case notFilter:
+			match, err := f.matchDocument(ctx, n, val.(map[string]any))
+			if err != nil || match {
+				return false, err
+			}
+		default:
+			field, err := n.LookupByString(key)
+			if err != nil {
+				return false, err
+			}
+			match, err := f.matchField(ctx, field.(schema.TypedNode), val)
+			if err != nil || !match {
+				return false, err
+			}
+		}
+	}
+	return true, nil
+}
+
+func (f *Filter) matchField(ctx context.Context, n schema.TypedNode, value any) (bool, error) {
+	if value == nil {
+		return true, nil
+	}
+	if f.system.IsRelation(n.Type()) {
 		id, err := n.AsString()
 		if err != nil {
 			return false, err
 		}
-		return e.filterDocument(ctx, n.Type().Name(), id, f)
+		return f.matchRelation(ctx, n.Type().Name(), id, value.(map[string]any))
 	}
-	for key, val := range f.(map[string]any) {
+	for key, val := range value.(map[string]any) {
 		switch key {
 		case equalFilter:
 			match, err := filterEqual(n, val)
@@ -85,53 +140,52 @@ func (e *executionContext) filterNode(ctx context.Context, n schema.TypedNode, f
 			if err != nil || match {
 				return false, err
 			}
-		case andFilter:
-			match, err := e.filterAnd(ctx, n, val)
-			if err != nil || !match {
-				return false, err
-			}
-		case orFilter:
-			match, err := e.filterOr(ctx, n, val)
-			if err != nil || !match {
-				return false, err
-			}
-		case notFilter:
-			match, err := e.filterNode(ctx, n, val)
-			if err != nil || match {
-				return false, err
-			}
 		case allFilter:
-			match, err := e.filterAll(ctx, n, val)
+			match, err := f.matchAll(ctx, n, val)
 			if err != nil || !match {
 				return false, err
 			}
 		case anyFilter:
-			match, err := e.filterAny(ctx, n, val)
+			match, err := f.matchAny(ctx, n, val)
 			if err != nil || !match {
 				return false, err
 			}
 		case noneFilter:
-			match, err := e.filterAny(ctx, n, val)
+			match, err := f.matchAny(ctx, n, val)
 			if err != nil || match {
 				return false, err
 			}
 		default:
-			field, err := n.LookupByString(key)
-			if err != nil {
-				return false, err
-			}
-			match, err := e.filterNode(ctx, field.(schema.TypedNode), val)
-			if err != nil || !match {
-				return false, err
-			}
+			return false, fmt.Errorf("invalid filter operator %s", key)
 		}
 	}
 	return true, nil
 }
 
-func (e *executionContext) filterDocument(ctx context.Context, collection string, id string, f any) (bool, error) {
-	rootLink := ctx.Value(rootContextKey).(datamodel.Link)
-	rootNode, err := e.store.Load(ctx, rootLink, e.system.Prototype(types.RootTypeName))
+func (f *Filter) matchLink(ctx context.Context, n schema.TypedNode, value any) (bool, error) {
+	if value == nil {
+		return true, nil
+	}
+	lnk, err := n.AsLink()
+	if err != nil {
+		return false, err
+	}
+	obj, err := f.store.Load(ctx, lnk, Prototype(n))
+	if err != nil {
+		return false, err
+	}
+	return f.matchDocument(ctx, obj.(schema.TypedNode), value)
+}
+
+func (f *Filter) matchRelation(ctx context.Context, collection, id string, value any) (bool, error) {
+	if value == nil {
+		return true, nil
+	}
+	rootLink, err := f.store.RootLink(ctx)
+	if err != nil {
+		return false, err
+	}
+	rootNode, err := f.store.Load(ctx, rootLink, f.system.Prototype(types.RootTypeName))
 	if err != nil {
 		return false, err
 	}
@@ -143,31 +197,15 @@ func (e *executionContext) filterDocument(ctx context.Context, collection string
 	if err != nil {
 		return false, err
 	}
-	ctx = context.WithValue(ctx, idContextKey, id)
-	return e.filterNode(ctx, linkNode.(schema.TypedNode), f)
+	return f.matchLink(ctx, linkNode.(schema.TypedNode), value)
 }
 
-func (e *executionContext) filterLink(ctx context.Context, n schema.TypedNode, f any) (bool, error) {
-	lnk, err := n.AsLink()
-	if err != nil {
-		return false, err
+func (f *Filter) matchAnd(ctx context.Context, n schema.TypedNode, value any) (bool, error) {
+	if value == nil {
+		return true, nil
 	}
-	obj, err := e.store.Load(ctx, lnk, node.Prototype(n))
-	if err != nil {
-		return false, err
-	}
-	ctx = context.WithValue(ctx, linkContextKey, lnk.String())
-	return e.filterNode(ctx, obj.(schema.TypedNode), f)
-}
-
-func (e *executionContext) filterAll(ctx context.Context, n schema.TypedNode, f any) (bool, error) {
-	iter := n.ListIterator()
-	for !iter.Done() {
-		_, v, err := iter.Next()
-		if err != nil {
-			return false, err
-		}
-		match, err := e.filterNode(ctx, v.(schema.TypedNode), f)
+	for _, v := range value.([]any) {
+		match, err := f.matchDocument(ctx, n, v.(map[string]any))
 		if err != nil || !match {
 			return false, err
 		}
@@ -175,45 +213,53 @@ func (e *executionContext) filterAll(ctx context.Context, n schema.TypedNode, f 
 	return true, nil
 }
 
-func (e *executionContext) filterAny(ctx context.Context, n schema.TypedNode, f any) (bool, error) {
+func (f *Filter) matchOr(ctx context.Context, n schema.TypedNode, value any) (bool, error) {
+	if value == nil {
+		return true, nil
+	}
+	for _, v := range value.([]any) {
+		match, err := f.matchDocument(ctx, n, v.(map[string]any))
+		if err != nil || match {
+			return match, err
+		}
+	}
+	return true, nil
+}
+
+func (f *Filter) matchAll(ctx context.Context, n schema.TypedNode, value any) (bool, error) {
+	if value == nil {
+		return true, nil
+	}
 	iter := n.ListIterator()
 	for !iter.Done() {
 		_, v, err := iter.Next()
 		if err != nil {
 			return false, err
 		}
-		match, err := e.filterNode(ctx, v.(schema.TypedNode), f)
+		match, err := f.matchField(ctx, v.(schema.TypedNode), value)
+		if err != nil || !match {
+			return false, err
+		}
+	}
+	return true, nil
+}
+
+func (f *Filter) matchAny(ctx context.Context, n schema.TypedNode, value any) (bool, error) {
+	if value == nil {
+		return true, nil
+	}
+	iter := n.ListIterator()
+	for !iter.Done() {
+		_, v, err := iter.Next()
+		if err != nil {
+			return false, err
+		}
+		match, err := f.matchField(ctx, v.(schema.TypedNode), value)
 		if err != nil || match {
 			return match, err
 		}
 	}
 	return false, nil
-}
-
-func (e *executionContext) filterAnd(ctx context.Context, n schema.TypedNode, f any) (bool, error) {
-	if f == nil {
-		return true, nil
-	}
-	for _, v := range f.([]any) {
-		match, err := e.filterNode(ctx, n, v.(map[string]any))
-		if err != nil || !match {
-			return false, err
-		}
-	}
-	return true, nil
-}
-
-func (e *executionContext) filterOr(ctx context.Context, n schema.TypedNode, f any) (bool, error) {
-	if f == nil {
-		return true, nil
-	}
-	for _, v := range f.([]any) {
-		match, err := e.filterNode(ctx, n, v.(map[string]any))
-		if err != nil || match {
-			return match, err
-		}
-	}
-	return true, nil
 }
 
 func filterIn(n schema.TypedNode, value any) (bool, error) {

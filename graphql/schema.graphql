@@ -57,9 +57,51 @@ input {{$name}}FilterInput {
 }
 
 """
+Input for patching {{$name}} fields and documents.
+"""
+input {{$name}}ListPatchInput {
+    """
+    Sets the value of the field.
+    """
+    set: [{{$name}}CreateInput]
+    """
+    Append values to the field.
+    """
+    append: [{{$name}}CreateInput]
+    """
+    Remove values from the field.
+    """
+    remove: [{{$name}}CreateInput]
+    """
+    Update all values in the field.
+    """
+    update: {{$name}}PatchInput
+}
+
+"""
+Input for patching {{$name}} documents.
+"""
+input {{$name}}PatchInput {
+    """
+    This field can be used to create relationships with existing {{$name}} documents.
+    """
+    _id: IDPatchInput
+{{- range $field := .Fields}}
+    {{- if $field.Type.Elem}}
+    {{$field.Name}}: {{$field.Type.Elem.Name}}ListPatchInput
+    {{- else}}
+    {{$field.Name}}: {{$field.Type.Name}}PatchInput
+    {{- end}}
+{{- end}}
+}
+
+"""
 Input for creating {{$name}} documents.
 """
 input {{$name}}CreateInput {
+    """
+    This field can be used to create relationships with existing {{$name}} documents.
+    """
     _id: ID
 {{- range $field := .Fields}}
     {{$def := index $.Types $field.Type.Name}}
@@ -100,6 +142,10 @@ type Mutation {
     Delete {{$name}} documents.
     """
     delete{{$name}}(filter: {{$name}}FilterInput): [{{$name}}]
+    """
+    Update {{$name}} documents.
+    """
+    update{{$name}}(filter: {{$name}}FilterInput, patch: {{$name}}PatchInput): [{{$name}}]
     {{- end}}
 {{- end}}
 }

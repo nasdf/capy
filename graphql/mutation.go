@@ -36,6 +36,13 @@ func (e *executionContext) executeMutation(ctx context.Context, set ast.Selectio
 				return err
 			}
 
+		case strings.HasPrefix(field.Name, updateOperationPrefix):
+			collection := strings.TrimPrefix(field.Name, updateOperationPrefix)
+			rootLink, err = e.updateMutation(ctx, field, collection, va)
+			if err != nil {
+				return err
+			}
+
 		case strings.HasPrefix(field.Name, deleteOperationPrefix):
 			collection := strings.TrimPrefix(field.Name, deleteOperationPrefix)
 			rootLink, err = e.deleteMutation(ctx, field, collection, va)
@@ -90,6 +97,62 @@ func (e *executionContext) createMutation(ctx context.Context, field graphql.Col
 	return rootLink, nil
 }
 
+func (e *executionContext) updateMutation(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) (datamodel.Link, error) {
+	rootLink := ctx.Value(rootContextKey).(datamodel.Link)
+	rootNode, err := e.store.Load(ctx, rootLink, e.system.Prototype(types.RootTypeName))
+	if err != nil {
+		return nil, err
+	}
+	collectionNode, err := rootNode.LookupByString(collection)
+	if err != nil {
+		return nil, err
+	}
+	la, err := na.BeginList(collectionNode.Length())
+	if err != nil {
+		return nil, err
+	}
+	args := field.ArgumentMap(e.params.Variables)
+	filter := node.NewFilter(e.store, e.system, args["filter"])
+	iter := collectionNode.MapIterator()
+	for !iter.Done() {
+		k, v, err := iter.Next()
+		if err != nil {
+			return nil, err
+		}
+		val := v.(schema.TypedNode)
+		key, err := k.AsString()
+		if err != nil {
+			return nil, err
+		}
+		ctx = context.WithValue(ctx, idContextKey, key)
+		match, err := filter.Match(ctx, val)
+		if err != nil {
+			return nil, err
+		}
+		if !match {
+			continue
+		}
+		err = e.queryNode(ctx, val, field, la.AssembleValue())
+		if err != nil {
+			return nil, err
+		}
+	}
+	err = la.Finish()
+	if err != nil {
+		return nil, err
+	}
+	rootPath := datamodel.ParsePath(types.RootParentsFieldName).AppendSegmentString("-")
+	rootNode, err = e.store.SetNode(ctx, rootPath, rootNode, basicnode.NewLink(rootLink))
+	if err != nil {
+		return nil, err
+	}
+	rootLink, err = e.store.Store(ctx, rootNode)
+	if err != nil {
+		return nil, err
+	}
+	return rootLink, nil
+}
+
 func (e *executionContext) deleteMutation(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) (datamodel.Link, error) {
 	rootLink := ctx.Value(rootContextKey).(datamodel.Link)
 	rootNode, err := e.store.Load(ctx, rootLink, e.system.Prototype(types.RootTypeName))
@@ -105,6 +168,7 @@ func (e *executionContext) deleteMutation(ctx context.Context, field graphql.Col
 		return nil, err
 	}
 	args := field.ArgumentMap(e.params.Variables)
+	filter := node.NewFilter(e.store, e.system, args["filter"])
 	iter := collectionNode.MapIterator()
 	for !iter.Done() {
 		k, v, err := iter.Next()
@@ -117,7 +181,7 @@ func (e *executionContext) deleteMutation(ctx context.Context, field graphql.Col
 			return nil, err
 		}
 		ctx = context.WithValue(ctx, idContextKey, key)
-		match, err := e.filterNode(ctx, val, args["filter"])
+		match, err := filter.Match(ctx, val)
 		if err != nil {
 			return nil, err
 		}

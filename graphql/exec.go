@@ -18,12 +18,13 @@ type contextKey string
 
 var (
 	idContextKey   = contextKey("id")
-	rootContextKey = contextKey("root")
+	rootContextKey = contextKey("root") // TODO replace root link with root node value
 	linkContextKey = contextKey("link")
 )
 
 const (
 	createOperationPrefix = "create"
+	updateOperationPrefix = "update"
 	deleteOperationPrefix = "delete"
 	listOperationPrefix   = "list"
 	findOperationPrefix   = "find"

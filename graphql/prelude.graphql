@@ -219,3 +219,141 @@ input BooleanListFilterInput {
     """
     none: [BooleanFilterInput!]
 }
+
+"""
+Input for patching ID fields.
+"""
+input IDPatchInput {
+    """
+    Sets the value of the field.
+    """
+    set: ID
+}
+
+"""
+Input for patching String fields.
+"""
+input StringPatchInput {
+    """
+    Sets the value of the field.
+    """
+    set: String
+}
+
+"""
+Input for patching Float fields.
+"""
+input FloatPatchInput {
+    """
+    Sets the value of the field.
+    """
+    set: Float
+}
+
+"""
+Input for patching Int fields.
+"""
+input IntPatchInput {
+    """
+    Sets the value of the field.
+    """
+    set: Int
+}
+
+"""
+Input for patching Boolean fields.
+"""
+input BooleanPatchInput {
+    """
+    Sets the value of the field.
+    """
+    set: Boolean
+}
+
+"""
+Input for patching String list fields.
+"""
+input StringListPatchInput {
+    """
+    Sets the value of the field.
+    """
+    set: [String]
+    """
+    Append values to the field.
+    """
+    append: [String]
+    """
+    Remove values from the field
+    """
+    remove: [String]
+    """
+    Update all values in the field.
+    """
+    update: StringPatchInput
+}
+
+"""
+Input for patching Float list fields.
+"""
+input FloatListPatchInput {
+    """
+    Sets the value of the field.
+    """
+    set: [Float]
+    """
+    Append values to the field.
+    """
+    append: [Float]
+    """
+    Remove values from the field
+    """
+    remove: [Float]
+    """
+    Update all values in the field.
+    """
+    update: FloatPatchInput
+}
+
+"""
+Input for patching Int list fields.
+"""
+input IntListPatchInput {
+    """
+    Sets the value of the field.
+    """
+    set: [Int]
+    """
+    Append values to the field.
+    """
+    append: [Int]
+    """
+    Remove values from the field
+    """
+    remove: [Int]
+    """
+    Update all values in the field.
+    """
+    update: IntPatchInput
+}
+
+"""
+Input for patching Boolean list fields.
+"""
+input BooleanListPatchInput {
+    """
+    Sets the value of the field.
+    """
+    set: [Boolean]
+    """
+    Append values to the field.
+    """
+    append: [Boolean]
+    """
+    Remove values from the field
+    """
+    remove: [Boolean]
+    """
+    Update all values in the field.
+    """
+    update: BooleanPatchInput
+}

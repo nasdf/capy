@@ -79,7 +79,7 @@ func (b *Builder) assignValue(ctx context.Context, t schema.Type, value any, na 
 	case *schema.TypeLink:
 		return b.assignLink(value.(string), na)
 	default:
-		return fmt.Errorf("unknown type %s", t.TypeKind().String())
+		return fmt.Errorf("invalid type %s", t.TypeKind().String())
 	}
 }
 
@@ -92,13 +92,12 @@ func (b *Builder) assignLink(value string, na datamodel.NodeAssembler) error {
 }
 
 func (b *Builder) assignReference(ctx context.Context, t schema.Type, value map[string]any, na datamodel.NodeAssembler) error {
-	collection := t.Name()
 	// if the provided input contains an id use that instead
 	id, ok := value["_id"].(string)
 	if ok {
 		return na.AssignString(id)
 	}
-	id, err := b.Build(ctx, collection, value)
+	id, err := b.Build(ctx, t.Name(), value)
 	if err != nil {
 		return err
 	}

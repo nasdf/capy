@@ -100,6 +100,7 @@ func (e *executionContext) queryCollection(ctx context.Context, field graphql.Co
 		return err
 	}
 	args := field.ArgumentMap(e.params.Variables)
+	filter := node.NewFilter(e.store, e.system, args["filter"])
 	iter := collectionNode.MapIterator()
 	for !iter.Done() {
 		k, v, err := iter.Next()
@@ -112,7 +113,7 @@ func (e *executionContext) queryCollection(ctx context.Context, field graphql.Co
 			return err
 		}
 		ctx = context.WithValue(ctx, idContextKey, key)
-		match, err := e.filterNode(ctx, val, args["filter"])
+		match, err := filter.Match(ctx, val)
 		if err != nil {
 			return err
 		}
