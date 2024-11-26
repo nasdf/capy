@@ -10,7 +10,6 @@ import (
 	"os"
 
 	"github.com/nasdf/capy"
-	"github.com/nasdf/capy/core"
 	"github.com/nasdf/capy/graphql"
 	"github.com/nasdf/capy/storage"
 
@@ -22,14 +21,13 @@ var schema string
 
 func main() {
 	ctx := context.Background()
-	store := core.Open(storage.NewMemory())
 
 	address := "localhost:8080"
 	if len(os.Args) >= 2 {
 		address = os.Args[1]
 	}
 
-	db, err := capy.New(ctx, store, schema)
+	db, err := capy.Open(ctx, storage.NewMemory(), schema)
 	if err != nil {
 		panic(err)
 	}

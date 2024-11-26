@@ -1,9 +1,12 @@
-package types
+package core
 
 import (
 	"fmt"
 	"strings"
 
+	"github.com/ipld/go-ipld-prime/datamodel"
+	"github.com/ipld/go-ipld-prime/node/basicnode"
+	"github.com/ipld/go-ipld-prime/node/bindnode"
 	"github.com/ipld/go-ipld-prime/schema"
 	"github.com/vektah/gqlparser/v2/ast"
 )
@@ -21,22 +24,6 @@ const (
 	CollectionSuffix = "+Collection"
 )
 
-var baseTypes = []schema.Type{
-	TypeID,
-	TypeInt,
-	TypeFloat,
-	TypeBoolean,
-	TypeString,
-	TypeIntList,
-	TypeNotNullIntList,
-	TypeFloatList,
-	TypeNotNullFloatList,
-	TypeBooleanList,
-	TypeNotNullBooleanList,
-	TypeStringList,
-	TypeNotNullStringList,
-}
-
 var (
 	TypeID                 = schema.SpawnString("ID")
 	TypeInt                = schema.SpawnInt("Int")
@@ -53,8 +40,37 @@ var (
 	TypeNotNullStringList  = schema.SpawnList("[String!]", TypeString.Name(), false)
 )
 
-func schemaTypeSystem(s *ast.Schema) (*schema.TypeSystem, []error) {
-	types := append([]schema.Type{}, baseTypes...)
+// Prototype returns a NodePrototype for the given Node.
+func Prototype(n datamodel.Node) datamodel.NodePrototype {
+	tn, ok := n.(schema.TypedNode)
+	if !ok {
+		return basicnode.Prototype.Any
+	}
+	lnk, ok := tn.Type().(*schema.TypeLink)
+	if ok && lnk.HasReferencedType() {
+		return bindnode.Prototype(nil, lnk.ReferencedType())
+	}
+	return bindnode.Prototype(nil, tn.Type())
+}
+
+// SpawnTypeSystem creates an IPLD TypeSystem from the given GraphQL schema.
+func SpawnTypeSystem(s *ast.Schema) (*schema.TypeSystem, []error) {
+	types := []schema.Type{
+		TypeID,
+		TypeInt,
+		TypeFloat,
+		TypeBoolean,
+		TypeString,
+		TypeIntList,
+		TypeNotNullIntList,
+		TypeFloatList,
+		TypeNotNullFloatList,
+		TypeBooleanList,
+		TypeNotNullBooleanList,
+		TypeStringList,
+		TypeNotNullStringList,
+	}
+
 	var rootFields []schema.StructField
 	for _, d := range s.Types {
 		if d.BuiltIn {
@@ -74,7 +90,7 @@ func schemaTypeSystem(s *ast.Schema) (*schema.TypeSystem, []error) {
 			linkType := schema.SpawnLinkReference(d.Name+LinkSuffix, d.Name+DocumentSuffix)
 			types = append(types, linkType)
 
-			collectionType := schema.SpawnMap(d.Name+CollectionSuffix, "String", linkType.Name(), false)
+			collectionType := schema.SpawnMap(d.Name+CollectionSuffix, TypeString.Name(), linkType.Name(), false)
 			types = append(types, collectionType)
 
 			types = append(types, schema.SpawnList(fmt.Sprintf("[%s]", d.Name), relationType.Name(), true))

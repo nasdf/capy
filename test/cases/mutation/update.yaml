@@ -1,0 +1,37 @@
+# This test ensures that update works correctly
+schema: |
+  type Film {
+    title: String
+  }
+operations:
+  - query: |
+        mutation {
+          createFilm(data: {title: "Hackers"}) {
+            title
+          }
+        }
+    response: |
+      {
+        "data": {
+          "createFilm": {
+            "title": "Hackers"
+          }
+        }
+      }
+  - query: |
+        mutation {
+          updateFilm(filter: {title: {eq: "Hackers"}}, patch: {title: {set: "Idiocracy"}}) {
+            title
+          }
+        }
+    response: |
+      {
+        "data": {
+          "updateFilm": [
+            {
+              "title": "Idiocracy"
+            }
+          ]
+        }
+      }
+

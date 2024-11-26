@@ -8,7 +8,6 @@ import (
 	"os"
 
 	"github.com/nasdf/capy"
-	"github.com/nasdf/capy/core"
 	"github.com/nasdf/capy/graphql"
 	"github.com/nasdf/capy/storage"
 
@@ -28,9 +27,7 @@ var mutation string
 
 func main() {
 	ctx := context.Background()
-	store := core.Open(storage.NewMemory())
-
-	db, err := capy.New(ctx, store, schema)
+	db, err := capy.Open(ctx, storage.NewMemory(), schema)
 	if err != nil {
 		panic(err)
 	}
@@ -48,7 +45,7 @@ func main() {
 	}
 	defer file.Close()
 
-	rootLink, err := store.RootLink(ctx)
+	rootLink, err := db.Store().RootLink(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -60,7 +57,7 @@ func main() {
 	ssb := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any)
 	sel := ssb.ExploreRecursive(selector.RecursionLimitNone(), ssb.ExploreAll(ssb.ExploreRecursiveEdge()))
 
-	w, err := car.NewSelectiveWriter(ctx, store.LinkSystem(), root, sel.Node())
+	w, err := car.NewSelectiveWriter(ctx, db.Store().LinkSystem(), root, sel.Node())
 	if err != nil {
 		panic(err)
 	}

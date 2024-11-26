@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/nasdf/capy/core"
-	"github.com/nasdf/capy/types"
 
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/ipld/go-ipld-prime/datamodel"
@@ -18,7 +17,6 @@ type contextKey string
 
 var (
 	idContextKey   = contextKey("id")
-	rootContextKey = contextKey("root") // TODO replace root link with root node value
 	linkContextKey = contextKey("link")
 )
 
@@ -38,13 +36,13 @@ type QueryParams struct {
 }
 
 // Execute runs the query and returns a node containing the result of the query operation.
-func Execute(ctx context.Context, system *types.System, store *core.Store, schema *ast.Schema, params QueryParams) (datamodel.Node, error) {
+func Execute(ctx context.Context, store *core.Store, schema *ast.Schema, params QueryParams) (datamodel.Node, error) {
 	nb := basicnode.Prototype.Any.NewBuilder()
 	ma, err := nb.BeginMap(2)
 	if err != nil {
 		return nil, err
 	}
-	err = execute(ctx, system, store, schema, params, ma)
+	err = execute(ctx, store, schema, params, ma)
 	if err != nil {
 		return nil, err
 	}
@@ -55,17 +53,21 @@ func Execute(ctx context.Context, system *types.System, store *core.Store, schem
 	return nb.Build(), nil
 }
 
-func execute(ctx context.Context, system *types.System, store *core.Store, schema *ast.Schema, params QueryParams, na datamodel.MapAssembler) error {
+func execute(ctx context.Context, store *core.Store, schema *ast.Schema, params QueryParams, na datamodel.MapAssembler) error {
 	query, errs := gqlparser.LoadQuery(schema, params.Query)
 	if errs != nil {
 		return assignErrors(errs, na)
 	}
+	rootLink, err := store.RootLink(ctx)
+	if err != nil {
+		return assignErrors(errs, na)
+	}
 	exe := executionContext{
-		schema: schema,
-		store:  store,
-		system: system,
-		params: params,
-		query:  query,
+		schema:   schema,
+		store:    store,
+		params:   params,
+		query:    query,
+		rootLink: rootLink,
 	}
 	data, err := exe.execute(ctx)
 	if err != nil {
@@ -79,11 +81,11 @@ func execute(ctx context.Context, system *types.System, store *core.Store, schem
 }
 
 type executionContext struct {
-	schema *ast.Schema
-	store  *core.Store
-	system *types.System
-	query  *ast.QueryDocument
-	params QueryParams
+	schema   *ast.Schema
+	store    *core.Store
+	query    *ast.QueryDocument
+	params   QueryParams
+	rootLink datamodel.Link
 }
 
 func (e *executionContext) execute(ctx context.Context) (datamodel.Node, error) {
@@ -96,12 +98,7 @@ func (e *executionContext) execute(ctx context.Context) (datamodel.Node, error) 
 	if operation == nil {
 		return nil, gqlerror.Errorf("operation is not defined")
 	}
-	rootLink, err := e.store.RootLink(ctx)
-	if err != nil {
-		return nil, err
-	}
 	res := basicnode.Prototype.Map.NewBuilder()
-	ctx = context.WithValue(ctx, rootContextKey, rootLink)
 	switch operation.Operation {
 	case ast.Mutation:
 		err := e.executeMutation(ctx, operation.SelectionSet, res)
@@ -110,7 +107,7 @@ func (e *executionContext) execute(ctx context.Context) (datamodel.Node, error) 
 		}
 
 	case ast.Query:
-		err = e.executeQuery(ctx, operation.SelectionSet, res)
+		err := e.executeQuery(ctx, operation.SelectionSet, res)
 		if err != nil {
 			return nil, err
 		}

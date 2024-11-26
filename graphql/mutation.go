@@ -4,8 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/nasdf/capy/node"
-	"github.com/nasdf/capy/types"
+	"github.com/nasdf/capy/core"
 
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/ipld/go-ipld-prime/datamodel"
@@ -16,9 +15,7 @@ import (
 )
 
 func (e *executionContext) executeMutation(ctx context.Context, set ast.SelectionSet, na datamodel.NodeAssembler) error {
-	rootLink := ctx.Value(rootContextKey).(datamodel.Link)
 	fields := e.collectFields(set, "Mutation")
-
 	ma, err := na.BeginMap(int64(len(fields)))
 	if err != nil {
 		return err
@@ -31,21 +28,21 @@ func (e *executionContext) executeMutation(ctx context.Context, set ast.Selectio
 		switch {
 		case strings.HasPrefix(field.Name, createOperationPrefix):
 			collection := strings.TrimPrefix(field.Name, createOperationPrefix)
-			rootLink, err = e.createMutation(ctx, field, collection, va)
+			err = e.createMutation(ctx, field, collection, va)
 			if err != nil {
 				return err
 			}
 
 		case strings.HasPrefix(field.Name, updateOperationPrefix):
 			collection := strings.TrimPrefix(field.Name, updateOperationPrefix)
-			rootLink, err = e.updateMutation(ctx, field, collection, va)
+			err = e.updateMutation(ctx, field, collection, va)
 			if err != nil {
 				return err
 			}
 
 		case strings.HasPrefix(field.Name, deleteOperationPrefix):
 			collection := strings.TrimPrefix(field.Name, deleteOperationPrefix)
-			rootLink, err = e.deleteMutation(ctx, field, collection, va)
+			err = e.deleteMutation(ctx, field, collection, va)
 			if err != nil {
 				return err
 			}
@@ -54,161 +51,122 @@ func (e *executionContext) executeMutation(ctx context.Context, set ast.Selectio
 			return gqlerror.Errorf("unsupported mutation %s", field.Name)
 		}
 	}
-	err = e.store.SetRootLink(ctx, rootLink)
+	err = e.store.SetRootLink(ctx, e.rootLink)
 	if err != nil {
 		return err
 	}
 	return ma.Finish()
 }
 
-func (e *executionContext) createMutation(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) (datamodel.Link, error) {
+func (e *executionContext) createMutation(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) error {
 	args := field.ArgumentMap(e.params.Variables)
-	builder := node.NewBuilder(e.store, e.system)
 
-	id, err := builder.Build(ctx, collection, args["data"])
+	id, err := e.createDocument(ctx, collection, args["data"])
 	if err != nil {
-		return nil, err
+		return err
 	}
-	rootLink := ctx.Value(rootContextKey).(datamodel.Link)
-	rootNode, err := e.store.Load(ctx, rootLink, e.system.Prototype(types.RootTypeName))
-	if err != nil {
-		return nil, err
-	}
-	for k, v := range builder.Documents() {
-		rootNode, err = e.store.SetNode(ctx, datamodel.ParsePath(k), rootNode, basicnode.NewLink(v))
-		if err != nil {
-			return nil, err
-		}
-	}
-	rootPath := datamodel.ParsePath(types.RootParentsFieldName).AppendSegmentString("-")
-	rootNode, err = e.store.SetNode(ctx, rootPath, rootNode, basicnode.NewLink(rootLink))
-	if err != nil {
-		return nil, err
-	}
-	rootLink, err = e.store.Store(ctx, rootNode)
-	if err != nil {
-		return nil, err
-	}
-	ctx = context.WithValue(ctx, rootContextKey, rootLink)
-	err = e.queryDocument(ctx, field, collection, id, na)
-	if err != nil {
-		return nil, err
-	}
-	return rootLink, nil
+	return e.queryDocument(ctx, field, collection, id, na)
 }
 
-func (e *executionContext) updateMutation(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) (datamodel.Link, error) {
-	rootLink := ctx.Value(rootContextKey).(datamodel.Link)
-	rootNode, err := e.store.Load(ctx, rootLink, e.system.Prototype(types.RootTypeName))
+func (e *executionContext) updateMutation(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) error {
+	rootNode, err := e.store.Load(ctx, e.rootLink, e.store.Prototype(core.RootTypeName))
 	if err != nil {
-		return nil, err
+		return err
 	}
 	collectionNode, err := rootNode.LookupByString(collection)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	la, err := na.BeginList(collectionNode.Length())
-	if err != nil {
-		return nil, err
-	}
+	var ids []string
 	args := field.ArgumentMap(e.params.Variables)
-	filter := node.NewFilter(e.store, e.system, args["filter"])
 	iter := collectionNode.MapIterator()
 	for !iter.Done() {
 		k, v, err := iter.Next()
 		if err != nil {
-			return nil, err
+			return err
 		}
 		val := v.(schema.TypedNode)
 		key, err := k.AsString()
 		if err != nil {
-			return nil, err
+			return err
 		}
 		ctx = context.WithValue(ctx, idContextKey, key)
-		match, err := filter.Match(ctx, val)
+		match, err := e.filterDocument(ctx, val, args["filter"])
 		if err != nil {
-			return nil, err
+			return err
+		}
+		if !match {
+			continue
+		}
+		err = e.patchDocument(ctx, collection, key, val, args["patch"])
+		if err != nil {
+			return err
+		}
+		ids = append(ids, key)
+	}
+	la, err := na.BeginList(collectionNode.Length())
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		err = e.queryDocument(ctx, field, collection, id, la.AssembleValue())
+		if err != nil {
+			return err
+		}
+	}
+	return la.Finish()
+}
+
+func (e *executionContext) deleteMutation(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) error {
+	rootNode, err := e.store.Load(ctx, e.rootLink, e.store.Prototype(core.RootTypeName))
+	if err != nil {
+		return err
+	}
+	collectionNode, err := rootNode.LookupByString(collection)
+	if err != nil {
+		return err
+	}
+	la, err := na.BeginList(collectionNode.Length())
+	if err != nil {
+		return err
+	}
+	args := field.ArgumentMap(e.params.Variables)
+	iter := collectionNode.MapIterator()
+	for !iter.Done() {
+		k, v, err := iter.Next()
+		if err != nil {
+			return err
+		}
+		val := v.(schema.TypedNode)
+		key, err := k.AsString()
+		if err != nil {
+			return err
+		}
+		ctx = context.WithValue(ctx, idContextKey, key)
+		match, err := e.filterDocument(ctx, val, args["filter"])
+		if err != nil {
+			return err
 		}
 		if !match {
 			continue
 		}
 		err = e.queryNode(ctx, val, field, la.AssembleValue())
 		if err != nil {
-			return nil, err
-		}
-	}
-	err = la.Finish()
-	if err != nil {
-		return nil, err
-	}
-	rootPath := datamodel.ParsePath(types.RootParentsFieldName).AppendSegmentString("-")
-	rootNode, err = e.store.SetNode(ctx, rootPath, rootNode, basicnode.NewLink(rootLink))
-	if err != nil {
-		return nil, err
-	}
-	rootLink, err = e.store.Store(ctx, rootNode)
-	if err != nil {
-		return nil, err
-	}
-	return rootLink, nil
-}
-
-func (e *executionContext) deleteMutation(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) (datamodel.Link, error) {
-	rootLink := ctx.Value(rootContextKey).(datamodel.Link)
-	rootNode, err := e.store.Load(ctx, rootLink, e.system.Prototype(types.RootTypeName))
-	if err != nil {
-		return nil, err
-	}
-	collectionNode, err := rootNode.LookupByString(collection)
-	if err != nil {
-		return nil, err
-	}
-	la, err := na.BeginList(collectionNode.Length())
-	if err != nil {
-		return nil, err
-	}
-	args := field.ArgumentMap(e.params.Variables)
-	filter := node.NewFilter(e.store, e.system, args["filter"])
-	iter := collectionNode.MapIterator()
-	for !iter.Done() {
-		k, v, err := iter.Next()
-		if err != nil {
-			return nil, err
-		}
-		val := v.(schema.TypedNode)
-		key, err := k.AsString()
-		if err != nil {
-			return nil, err
-		}
-		ctx = context.WithValue(ctx, idContextKey, key)
-		match, err := filter.Match(ctx, val)
-		if err != nil {
-			return nil, err
-		}
-		if !match {
-			continue
-		}
-		err = e.queryNode(ctx, val, field, la.AssembleValue())
-		if err != nil {
-			return nil, err
+			return err
 		}
 		rootNode, err = e.store.SetNode(ctx, datamodel.ParsePath(collection+"/"+key), rootNode, nil)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
-	err = la.Finish()
+	rootPath := datamodel.ParsePath(core.RootParentsFieldName).AppendSegmentString("-")
+	rootNode, err = e.store.SetNode(ctx, rootPath, rootNode, basicnode.NewLink(e.rootLink))
 	if err != nil {
-		return nil, err
+		return err
 	}
-	rootPath := datamodel.ParsePath(types.RootParentsFieldName).AppendSegmentString("-")
-	rootNode, err = e.store.SetNode(ctx, rootPath, rootNode, basicnode.NewLink(rootLink))
+	e.rootLink, err = e.store.Store(ctx, rootNode)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	rootLink, err = e.store.Store(ctx, rootNode)
-	if err != nil {
-		return nil, err
-	}
-	return rootLink, nil
+	return la.Finish()
 }

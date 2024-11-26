@@ -5,8 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/nasdf/capy/node"
-	"github.com/nasdf/capy/types"
+	"github.com/nasdf/capy/core"
 
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/ipld/go-ipld-prime/datamodel"
@@ -68,8 +67,7 @@ func (e *executionContext) executeQuery(ctx context.Context, set ast.SelectionSe
 }
 
 func (e *executionContext) queryDocument(ctx context.Context, field graphql.CollectedField, collection string, id string, na datamodel.NodeAssembler) error {
-	rootLink := ctx.Value(rootContextKey).(datamodel.Link)
-	rootNode, err := e.store.Load(ctx, rootLink, e.system.Prototype(types.RootTypeName))
+	rootNode, err := e.store.Load(ctx, e.rootLink, e.store.Prototype(core.RootTypeName))
 	if err != nil {
 		return err
 	}
@@ -86,8 +84,7 @@ func (e *executionContext) queryDocument(ctx context.Context, field graphql.Coll
 }
 
 func (e *executionContext) queryCollection(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) error {
-	rootLink := ctx.Value(rootContextKey).(datamodel.Link)
-	rootNode, err := e.store.Load(ctx, rootLink, e.system.Prototype(types.RootTypeName))
+	rootNode, err := e.store.Load(ctx, e.rootLink, e.store.Prototype(core.RootTypeName))
 	if err != nil {
 		return err
 	}
@@ -100,7 +97,6 @@ func (e *executionContext) queryCollection(ctx context.Context, field graphql.Co
 		return err
 	}
 	args := field.ArgumentMap(e.params.Variables)
-	filter := node.NewFilter(e.store, e.system, args["filter"])
 	iter := collectionNode.MapIterator()
 	for !iter.Done() {
 		k, v, err := iter.Next()
@@ -113,7 +109,7 @@ func (e *executionContext) queryCollection(ctx context.Context, field graphql.Co
 			return err
 		}
 		ctx = context.WithValue(ctx, idContextKey, key)
-		match, err := filter.Match(ctx, val)
+		match, err := e.filterDocument(ctx, val, args["filter"])
 		if err != nil {
 			return err
 		}
@@ -132,7 +128,7 @@ func (e *executionContext) queryNode(ctx context.Context, n schema.TypedNode, fi
 	if len(field.SelectionSet) == 0 {
 		return na.AssignNode(n)
 	}
-	if e.system.IsRelation(n.Type()) {
+	if e.store.IsRelation(n.Type()) {
 		id, err := n.AsString()
 		if err != nil {
 			return err
@@ -158,7 +154,7 @@ func (e *executionContext) queryLink(ctx context.Context, n schema.TypedNode, fi
 	if err != nil {
 		return err
 	}
-	obj, err := e.store.Load(ctx, lnk, node.Prototype(n))
+	obj, err := e.store.Load(ctx, lnk, core.Prototype(n))
 	if err != nil {
 		return err
 	}
@@ -186,7 +182,7 @@ func (e *executionContext) queryList(ctx context.Context, n schema.TypedNode, fi
 }
 
 func (e *executionContext) queryMap(ctx context.Context, n schema.TypedNode, field graphql.CollectedField, na datamodel.NodeAssembler) error {
-	typeName := strings.TrimSuffix(n.Type().Name(), types.DocumentSuffix)
+	typeName := strings.TrimSuffix(n.Type().Name(), core.DocumentSuffix)
 	fields := e.collectFields(field.SelectionSet, typeName)
 	ma, err := na.BeginMap(int64(len(fields)))
 	if err != nil {

@@ -13,7 +13,6 @@ import (
 	"github.com/nasdf/capy/core"
 	"github.com/nasdf/capy/graphql"
 	"github.com/nasdf/capy/storage"
-	"github.com/nasdf/capy/types"
 
 	"github.com/ipld/go-ipld-prime/codec/json"
 	"github.com/ipld/go-ipld-prime/node/bindnode"
@@ -34,22 +33,23 @@ type TestCase struct {
 
 func (tc TestCase) Run(t *testing.T) {
 	ctx := context.Background()
-	store := core.Open(storage.NewMemory())
 
-	db, err := capy.New(ctx, store, tc.Schema)
+	db, err := capy.Open(ctx, storage.NewMemory(), tc.Schema)
 	require.NoError(t, err, "failed to create db")
+
+	store := db.Store()
 
 	for _, op := range tc.Operations {
 		rootLink, err := store.RootLink(ctx)
 		require.NoError(t, err, "failed to load root link")
 
-		rootNode, err := store.Load(ctx, rootLink, db.Types.Prototype(types.RootTypeName))
+		rootNode, err := store.Load(ctx, rootLink, store.Prototype(core.RootTypeName))
 		require.NoError(t, err, "failed to load root node")
 
 		rootValue := bindnode.Unwrap(rootNode)
 		require.NotNil(t, rootValue)
 
-		query, err := op.QueryTemplate(ctx, store, rootValue)
+		query, err := op.QueryTemplate(ctx, rootValue)
 		require.NoError(t, err, "failed to execute query template")
 
 		node, err := db.Execute(ctx, graphql.QueryParams{Query: query})
@@ -59,7 +59,7 @@ func (tc TestCase) Run(t *testing.T) {
 		err = json.Encode(node, &actual)
 		require.NoError(t, err, "failed to encode results")
 
-		expected, err := op.ResponseTemplate(ctx, store, rootValue)
+		expected, err := op.ResponseTemplate(ctx, rootValue)
 		require.NoError(t, err, "failed to execute response template")
 
 		assert.JSONEq(t, expected, actual.String())
@@ -73,7 +73,7 @@ type Operation struct {
 	Response string
 }
 
-func (o Operation) QueryTemplate(ctx context.Context, store *core.Store, rootValue any) (string, error) {
+func (o Operation) QueryTemplate(ctx context.Context, rootValue any) (string, error) {
 	tpl, err := template.New("response").Parse(o.Query)
 	if err != nil {
 		return "", err
@@ -85,7 +85,7 @@ func (o Operation) QueryTemplate(ctx context.Context, store *core.Store, rootVal
 	return data.String(), nil
 }
 
-func (o Operation) ResponseTemplate(ctx context.Context, store *core.Store, rootValue any) (string, error) {
+func (o Operation) ResponseTemplate(ctx context.Context, rootValue any) (string, error) {
 	tpl, err := template.New("response").Parse(o.Response)
 	if err != nil {
 		return "", err
