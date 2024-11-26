@@ -1,0 +1,41 @@
+# This test ensures that update append operations work correctly
+schema: |
+  type Player {
+    name: String
+    scores: [Int]
+  }
+operations:
+  - query: |
+        mutation {
+          createPlayer(data: {name: "Bob"}) {
+            name
+            scores
+          }
+        }
+    response: |
+      {
+        "data": {
+          "createPlayer": {
+            "name": "Bob",
+            "scores": null
+          }
+        }
+      }
+  - query: |
+        mutation {
+          updatePlayer(filter: {name: {eq: "Bob"}}, patch: {scores: {append: 10}}) {
+            name
+            scores
+          }
+        }
+    response: |
+      {
+        "data": {
+          "updatePlayer": [
+            {
+              "name": "Bob",
+              "scores": [10]
+            }
+          ]
+        }
+      }

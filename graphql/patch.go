@@ -12,7 +12,8 @@ import (
 )
 
 const (
-	setPatch = "set"
+	setPatch    = "set"
+	appendPatch = "append"
 )
 
 func (e *executionContext) patchDocument(ctx context.Context, collection, id string, n schema.TypedNode, value any) error {
@@ -24,7 +25,8 @@ func (e *executionContext) patchDocument(ctx context.Context, collection, id str
 	if err != nil {
 		return err
 	}
-	patch := value.(map[string]any)
+	structType := n.Type().(*schema.TypeStruct)
+	args := value.(map[string]any)
 	iter := n.MapIterator()
 	for !iter.Done() {
 		k, v, err := iter.Next()
@@ -39,7 +41,8 @@ func (e *executionContext) patchDocument(ctx context.Context, collection, id str
 		if err != nil {
 			return err
 		}
-		err = e.patchField(ctx, v.(schema.TypedNode), patch[key], na)
+		typ := structType.Field(key).Type()
+		err = e.patchField(ctx, typ, v, args[key], na)
 		if err != nil {
 			return err
 		}
@@ -68,16 +71,16 @@ func (e *executionContext) patchDocument(ctx context.Context, collection, id str
 	return nil
 }
 
-func (b *executionContext) patchField(ctx context.Context, n schema.TypedNode, value any, na datamodel.NodeAssembler) error {
+func (b *executionContext) patchField(ctx context.Context, t schema.Type, n datamodel.Node, value any, na datamodel.NodeAssembler) error {
 	if value == nil {
 		return na.AssignNode(n)
 	}
-	if b.store.IsRelation(n.Type()) {
+	if b.store.IsRelation(t) {
 		id, err := n.AsString()
 		if err != nil {
 			return err
 		}
-		return b.patchRelation(ctx, n.Type().Name(), id, value)
+		return b.patchRelation(ctx, t.Name(), id, value)
 	}
 	patch := value.(map[string]any)
 	if len(patch) != 1 {
@@ -89,7 +92,9 @@ func (b *executionContext) patchField(ctx context.Context, n schema.TypedNode, v
 	}
 	switch op {
 	case setPatch:
-		return b.assignValue(ctx, n.Type(), patch[op], na)
+		return b.assignValue(ctx, t, patch[op], na)
+	case appendPatch:
+		return b.patchListAppend(ctx, t, n, patch[op], na)
 	default:
 		return fmt.Errorf("invalid patch operation %s", op)
 	}
@@ -125,4 +130,35 @@ func (b *executionContext) patchRelation(ctx context.Context, collection, id str
 		return err
 	}
 	return b.patchLink(ctx, collection, id, linkNode.(schema.TypedNode), value)
+}
+
+func (b *executionContext) patchListAppend(ctx context.Context, t schema.Type, n datamodel.Node, value any, na datamodel.NodeAssembler) error {
+	// value is a single item or a list of items
+	vals, ok := value.([]any)
+	if !ok {
+		vals = append(vals, value)
+	}
+	la, err := na.BeginList(n.Length() + int64(len(vals)))
+	if err != nil {
+		return err
+	}
+	iter := n.ListIterator()
+	for iter != nil && !iter.Done() {
+		_, v, err := iter.Next()
+		if err != nil {
+			return err
+		}
+		err = la.AssembleValue().AssignNode(v)
+		if err != nil {
+			return err
+		}
+	}
+	vt := t.(*schema.TypeList).ValueType()
+	for _, v := range vals {
+		err = b.assignValue(ctx, vt, v, la.AssembleValue())
+		if err != nil {
+			return err
+		}
+	}
+	return la.Finish()
 }

@@ -217,7 +217,11 @@ func (e *executionContext) queryMap(ctx context.Context, n schema.TypedNode, fie
 			if err != nil {
 				return err
 			}
-			err = e.queryNode(ctx, obj.(schema.TypedNode), field, va)
+			if obj.IsAbsent() || obj.IsNull() {
+				err = va.AssignNull()
+			} else {
+				err = e.queryNode(ctx, obj.(schema.TypedNode), field, va)
+			}
 			if err != nil {
 				return err
 			}

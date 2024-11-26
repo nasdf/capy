@@ -68,14 +68,6 @@ input {{$name}}ListPatchInput {
     Append values to the field.
     """
     append: [{{$name}}CreateInput]
-    """
-    Remove values from the field.
-    """
-    remove: [{{$name}}CreateInput]
-    """
-    Update all values in the field.
-    """
-    update: {{$name}}PatchInput
 }
 
 """

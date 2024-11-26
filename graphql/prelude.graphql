@@ -282,14 +282,6 @@ input StringListPatchInput {
     Append values to the field.
     """
     append: [String]
-    """
-    Remove values from the field
-    """
-    remove: [String]
-    """
-    Update all values in the field.
-    """
-    update: StringPatchInput
 }
 
 """
@@ -304,14 +296,6 @@ input FloatListPatchInput {
     Append values to the field.
     """
     append: [Float]
-    """
-    Remove values from the field
-    """
-    remove: [Float]
-    """
-    Update all values in the field.
-    """
-    update: FloatPatchInput
 }
 
 """
@@ -326,14 +310,6 @@ input IntListPatchInput {
     Append values to the field.
     """
     append: [Int]
-    """
-    Remove values from the field
-    """
-    remove: [Int]
-    """
-    Update all values in the field.
-    """
-    update: IntPatchInput
 }
 
 """
@@ -348,12 +324,4 @@ input BooleanListPatchInput {
     Append values to the field.
     """
     append: [Boolean]
-    """
-    Remove values from the field
-    """
-    remove: [Boolean]
-    """
-    Update all values in the field.
-    """
-    update: BooleanPatchInput
 }
