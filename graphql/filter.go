@@ -161,11 +161,7 @@ func (e *executionContext) filterRelation(ctx context.Context, collection, id st
 	if value == nil {
 		return true, nil
 	}
-	rootLink, err := e.store.RootLink(ctx)
-	if err != nil {
-		return false, err
-	}
-	rootNode, err := e.store.Load(ctx, rootLink, e.store.Prototype(core.RootTypeName))
+	rootNode, err := e.store.RootNode(ctx)
 	if err != nil {
 		return false, err
 	}

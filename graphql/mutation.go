@@ -51,6 +51,20 @@ func (e *executionContext) executeMutation(ctx context.Context, set ast.Selectio
 			return gqlerror.Errorf("unsupported mutation %s", field.Name)
 		}
 	}
+	// commit the changes
+	rootNode, err := e.store.Load(ctx, e.rootLink, e.store.Prototype(core.RootTypeName))
+	if err != nil {
+		return err
+	}
+	rootPath := datamodel.ParsePath(core.RootParentsFieldName).AppendSegmentString("-")
+	rootNode, err = e.store.SetNode(ctx, rootPath, rootNode, basicnode.NewLink(e.rootLink))
+	if err != nil {
+		return err
+	}
+	e.rootLink, err = e.store.Store(ctx, rootNode)
+	if err != nil {
+		return err
+	}
 	err = e.store.SetRootLink(ctx, e.rootLink)
 	if err != nil {
 		return err
@@ -104,17 +118,7 @@ func (e *executionContext) updateMutation(ctx context.Context, field graphql.Col
 		}
 		ids = append(ids, key)
 	}
-	la, err := na.BeginList(collectionNode.Length())
-	if err != nil {
-		return err
-	}
-	for _, id := range ids {
-		err = e.queryDocument(ctx, field, collection, id, la.AssembleValue())
-		if err != nil {
-			return err
-		}
-	}
-	return la.Finish()
+	return e.queryDocuments(ctx, field, collection, ids, na)
 }
 
 func (e *executionContext) deleteMutation(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) error {
@@ -158,11 +162,6 @@ func (e *executionContext) deleteMutation(ctx context.Context, field graphql.Col
 		if err != nil {
 			return err
 		}
-	}
-	rootPath := datamodel.ParsePath(core.RootParentsFieldName).AppendSegmentString("-")
-	rootNode, err = e.store.SetNode(ctx, rootPath, rootNode, basicnode.NewLink(e.rootLink))
-	if err != nil {
-		return err
 	}
 	e.rootLink, err = e.store.Store(ctx, rootNode)
 	if err != nil {

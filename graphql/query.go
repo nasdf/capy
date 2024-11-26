@@ -66,6 +66,33 @@ func (e *executionContext) executeQuery(ctx context.Context, set ast.SelectionSe
 	return ma.Finish()
 }
 
+func (e *executionContext) queryDocuments(ctx context.Context, field graphql.CollectedField, collection string, ids []string, na datamodel.NodeAssembler) error {
+	rootNode, err := e.store.Load(ctx, e.rootLink, e.store.Prototype(core.RootTypeName))
+	if err != nil {
+		return err
+	}
+	collectionNode, err := rootNode.LookupByString(collection)
+	if err != nil {
+		return err
+	}
+	la, err := na.BeginList(int64(len(ids)))
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		linkNode, err := collectionNode.LookupByString(id)
+		if err != nil {
+			return err
+		}
+		ctx = context.WithValue(ctx, idContextKey, id)
+		err = e.queryNode(ctx, linkNode.(schema.TypedNode), field, la.AssembleValue())
+		if err != nil {
+			return err
+		}
+	}
+	return la.Finish()
+}
+
 func (e *executionContext) queryDocument(ctx context.Context, field graphql.CollectedField, collection string, id string, na datamodel.NodeAssembler) error {
 	rootNode, err := e.store.Load(ctx, e.rootLink, e.store.Prototype(core.RootTypeName))
 	if err != nil {

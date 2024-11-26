@@ -34,4 +34,20 @@ operations:
           ]
         }
       }
+  - query: |
+        query {
+          listFilm {
+            title
+          }
+        }
+    response: |
+      {
+        "data": {
+          "listFilm": [
+            {
+              "title": "Idiocracy"
+            }
+          ]
+        }
+      }
 

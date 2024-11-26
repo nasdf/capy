@@ -10,7 +10,6 @@ import (
 	"text/template"
 
 	"github.com/nasdf/capy"
-	"github.com/nasdf/capy/core"
 	"github.com/nasdf/capy/graphql"
 	"github.com/nasdf/capy/storage"
 
@@ -37,13 +36,8 @@ func (tc TestCase) Run(t *testing.T) {
 	db, err := capy.Open(ctx, storage.NewMemory(), tc.Schema)
 	require.NoError(t, err, "failed to create db")
 
-	store := db.Store()
-
 	for _, op := range tc.Operations {
-		rootLink, err := store.RootLink(ctx)
-		require.NoError(t, err, "failed to load root link")
-
-		rootNode, err := store.Load(ctx, rootLink, store.Prototype(core.RootTypeName))
+		rootNode, err := db.Store().RootNode(ctx)
 		require.NoError(t, err, "failed to load root node")
 
 		rootValue := bindnode.Unwrap(rootNode)

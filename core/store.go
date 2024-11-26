@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"errors"
+	"slices"
 
 	"github.com/nasdf/capy/storage"
 	"github.com/vektah/gqlparser/v2"
@@ -109,6 +110,15 @@ func Load(ctx context.Context, storage storage.Storage) (string, *Store, error) 
 	return schema, store, nil
 }
 
+// RootNode returns the root node from the store.
+func (s *Store) RootNode(ctx context.Context) (datamodel.Node, error) {
+	rootLink, err := s.RootLink(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return s.Load(ctx, rootLink, s.Prototype(RootTypeName))
+}
+
 // RootLink returns the current root link from the store.
 func (s *Store) RootLink(ctx context.Context) (datamodel.Link, error) {
 	data, err := s.storage.Get(ctx, RootLinkKey)
@@ -167,8 +177,7 @@ func (s *Store) TypeSystem() *schema.TypeSystem {
 
 // IsRelation returns true if the given type is a relation.
 func (s *Store) IsRelation(t schema.Type) bool {
-	_, ok := s.types.GetTypes()[t.Name()+DocumentSuffix]
-	return ok && t.TypeKind() == schema.TypeKind_String
+	return t.TypeKind() == schema.TypeKind_String && slices.Contains(s.types.Names(), t.Name()+DocumentSuffix)
 }
 
 // Type returns the type with a matching name.
