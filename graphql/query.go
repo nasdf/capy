@@ -3,6 +3,7 @@ package graphql
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/nasdf/capy/core"
@@ -67,86 +68,48 @@ func (e *executionContext) executeQuery(ctx context.Context, set ast.SelectionSe
 }
 
 func (e *executionContext) queryDocuments(ctx context.Context, field graphql.CollectedField, collection string, ids []string, na datamodel.NodeAssembler) error {
-	rootNode, err := e.store.Load(ctx, e.rootLink, e.store.Prototype(core.RootTypeName))
-	if err != nil {
-		return err
-	}
-	collectionNode, err := rootNode.LookupByString(collection)
-	if err != nil {
-		return err
-	}
 	la, err := na.BeginList(int64(len(ids)))
 	if err != nil {
 		return err
 	}
-	for _, id := range ids {
-		linkNode, err := collectionNode.LookupByString(id)
-		if err != nil {
-			return err
+	err = e.tx.ForEachDocument(ctx, collection, func(id string, doc datamodel.Node) error {
+		if !slices.Contains(ids, id) {
+			return nil
 		}
 		ctx = context.WithValue(ctx, idContextKey, id)
-		err = e.queryNode(ctx, linkNode.(schema.TypedNode), field, la.AssembleValue())
-		if err != nil {
-			return err
-		}
+		return e.queryNode(ctx, doc.(schema.TypedNode), field, la.AssembleValue())
+	})
+	if err != nil {
+		return err
 	}
 	return la.Finish()
 }
 
 func (e *executionContext) queryDocument(ctx context.Context, field graphql.CollectedField, collection string, id string, na datamodel.NodeAssembler) error {
-	rootNode, err := e.store.Load(ctx, e.rootLink, e.store.Prototype(core.RootTypeName))
-	if err != nil {
-		return err
-	}
-	collectionNode, err := rootNode.LookupByString(collection)
-	if err != nil {
-		return err
-	}
-	linkNode, err := collectionNode.LookupByString(id)
+	doc, err := e.tx.ReadDocument(ctx, collection, id)
 	if err != nil {
 		return err
 	}
 	ctx = context.WithValue(ctx, idContextKey, id)
-	return e.queryNode(ctx, linkNode.(schema.TypedNode), field, na)
+	return e.queryNode(ctx, doc.(schema.TypedNode), field, na)
 }
 
 func (e *executionContext) queryCollection(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) error {
-	rootNode, err := e.store.Load(ctx, e.rootLink, e.store.Prototype(core.RootTypeName))
-	if err != nil {
-		return err
-	}
-	collectionNode, err := rootNode.LookupByString(collection)
-	if err != nil {
-		return err
-	}
-	la, err := na.BeginList(collectionNode.Length())
+	la, err := na.BeginList(0)
 	if err != nil {
 		return err
 	}
 	args := field.ArgumentMap(e.params.Variables)
-	iter := collectionNode.MapIterator()
-	for !iter.Done() {
-		k, v, err := iter.Next()
-		if err != nil {
+	err = e.tx.ForEachDocument(ctx, collection, func(id string, doc datamodel.Node) error {
+		ctx = context.WithValue(ctx, idContextKey, id)
+		match, err := e.filterDocument(ctx, doc.(schema.TypedNode), args["filter"])
+		if err != nil || !match {
 			return err
 		}
-		val := v.(schema.TypedNode)
-		key, err := k.AsString()
-		if err != nil {
-			return err
-		}
-		ctx = context.WithValue(ctx, idContextKey, key)
-		match, err := e.filterDocument(ctx, val, args["filter"])
-		if err != nil {
-			return err
-		}
-		if !match {
-			continue
-		}
-		err = e.queryNode(ctx, val, field, la.AssembleValue())
-		if err != nil {
-			return err
-		}
+		return e.queryNode(ctx, doc.(schema.TypedNode), field, la.AssembleValue())
+	})
+	if err != nil {
+		return err
 	}
 	return la.Finish()
 }
@@ -155,16 +118,15 @@ func (e *executionContext) queryNode(ctx context.Context, n schema.TypedNode, fi
 	if len(field.SelectionSet) == 0 {
 		return na.AssignNode(n)
 	}
-	if e.store.IsRelation(n.Type()) {
+	collection, ok := core.RelationName(n.Type())
+	if ok {
 		id, err := n.AsString()
 		if err != nil {
 			return err
 		}
-		return e.queryDocument(ctx, field, n.Type().Name(), id, na)
+		return e.queryDocument(ctx, field, collection, id, na)
 	}
 	switch n.Kind() {
-	case datamodel.Kind_Link:
-		return e.queryLink(ctx, n, field, na)
 	case datamodel.Kind_List:
 		return e.queryList(ctx, n, field, na)
 	case datamodel.Kind_Map:
@@ -174,19 +136,6 @@ func (e *executionContext) queryNode(ctx context.Context, n schema.TypedNode, fi
 	default:
 		return gqlerror.ErrorPosf(field.Position, "cannot traverse node of type %s", n.Kind().String())
 	}
-}
-
-func (e *executionContext) queryLink(ctx context.Context, n schema.TypedNode, field graphql.CollectedField, na datamodel.NodeAssembler) error {
-	lnk, err := n.AsLink()
-	if err != nil {
-		return err
-	}
-	obj, err := e.store.Load(ctx, lnk, core.Prototype(n))
-	if err != nil {
-		return err
-	}
-	ctx = context.WithValue(ctx, linkContextKey, lnk.String())
-	return e.queryNode(ctx, obj.(schema.TypedNode), field, na)
 }
 
 func (e *executionContext) queryList(ctx context.Context, n schema.TypedNode, field graphql.CollectedField, na datamodel.NodeAssembler) error {
@@ -209,8 +158,7 @@ func (e *executionContext) queryList(ctx context.Context, n schema.TypedNode, fi
 }
 
 func (e *executionContext) queryMap(ctx context.Context, n schema.TypedNode, field graphql.CollectedField, na datamodel.NodeAssembler) error {
-	typeName := strings.TrimSuffix(n.Type().Name(), core.DocumentSuffix)
-	fields := e.collectFields(field.SelectionSet, typeName)
+	fields := e.collectFields(field.SelectionSet, n.Type().Name())
 	ma, err := na.BeginMap(int64(len(fields)))
 	if err != nil {
 		return err
@@ -228,7 +176,7 @@ func (e *executionContext) queryMap(ctx context.Context, n schema.TypedNode, fie
 			}
 
 		case "__typename":
-			err = va.AssignString(typeName)
+			err = va.AssignString(n.Type().Name())
 			if err != nil {
 				return err
 			}

@@ -36,13 +36,13 @@ type QueryParams struct {
 }
 
 // Execute runs the query and returns a node containing the result of the query operation.
-func Execute(ctx context.Context, store *core.Store, schema *ast.Schema, params QueryParams) (datamodel.Node, error) {
+func Execute(ctx context.Context, db *core.DB, schema *ast.Schema, params QueryParams) (datamodel.Node, error) {
 	nb := basicnode.Prototype.Any.NewBuilder()
 	ma, err := nb.BeginMap(2)
 	if err != nil {
 		return nil, err
 	}
-	err = execute(ctx, store, schema, params, ma)
+	err = assignResults(ctx, db, schema, params, ma)
 	if err != nil {
 		return nil, err
 	}
@@ -53,25 +53,37 @@ func Execute(ctx context.Context, store *core.Store, schema *ast.Schema, params 
 	return nb.Build(), nil
 }
 
-func execute(ctx context.Context, store *core.Store, schema *ast.Schema, params QueryParams, na datamodel.MapAssembler) error {
+func assignResults(ctx context.Context, db *core.DB, schema *ast.Schema, params QueryParams, na datamodel.MapAssembler) error {
 	query, errs := gqlparser.LoadQuery(schema, params.Query)
 	if errs != nil {
 		return assignErrors(errs, na)
 	}
-	rootLink, err := store.RootLink(ctx)
+	var operation *ast.OperationDefinition
+	if params.OperationName != "" {
+		operation = query.Operations.ForName(params.OperationName)
+	} else if len(query.Operations) == 1 {
+		operation = query.Operations[0]
+	}
+	if operation == nil {
+		return assignErrors(gqlerror.List{gqlerror.Errorf("operation is not defined")}, na)
+	}
+	tx, err := db.Transaction(ctx, operation.Operation == ast.Query)
 	if err != nil {
-		return assignErrors(errs, na)
+		return err
 	}
 	exe := executionContext{
-		schema:   schema,
-		store:    store,
-		params:   params,
-		query:    query,
-		rootLink: rootLink,
+		tx:     tx,
+		schema: schema,
+		params: params,
+		query:  query,
 	}
-	data, err := exe.execute(ctx)
+	data, err := exe.execute(ctx, operation)
 	if err != nil {
 		return assignErrors(gqlerror.List{gqlerror.WrapIfUnwrapped(err)}, na)
+	}
+	err = tx.Commit(ctx)
+	if err != nil {
+		return err
 	}
 	va, err := na.AssembleEntry("data")
 	if err != nil {
@@ -81,23 +93,13 @@ func execute(ctx context.Context, store *core.Store, schema *ast.Schema, params 
 }
 
 type executionContext struct {
-	schema   *ast.Schema
-	store    *core.Store
-	query    *ast.QueryDocument
-	params   QueryParams
-	rootLink datamodel.Link
+	tx     *core.Transaction
+	schema *ast.Schema
+	query  *ast.QueryDocument
+	params QueryParams
 }
 
-func (e *executionContext) execute(ctx context.Context) (datamodel.Node, error) {
-	var operation *ast.OperationDefinition
-	if e.params.OperationName != "" {
-		operation = e.query.Operations.ForName(e.params.OperationName)
-	} else if len(e.query.Operations) == 1 {
-		operation = e.query.Operations[0]
-	}
-	if operation == nil {
-		return nil, gqlerror.Errorf("operation is not defined")
-	}
+func (e *executionContext) execute(ctx context.Context, operation *ast.OperationDefinition) (datamodel.Node, error) {
 	res := basicnode.Prototype.Map.NewBuilder()
 	switch operation.Operation {
 	case ast.Mutation:

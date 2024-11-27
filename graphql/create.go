@@ -6,48 +6,26 @@ import (
 
 	"github.com/nasdf/capy/core"
 
-	"github.com/google/uuid"
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
-	"github.com/ipld/go-ipld-prime/node/basicnode"
 	"github.com/ipld/go-ipld-prime/node/bindnode"
 	"github.com/ipld/go-ipld-prime/schema"
 )
 
 func (e *executionContext) createDocument(ctx context.Context, collection string, value any) (string, error) {
-	nt := e.store.Type(collection + core.DocumentSuffix)
+	nt := e.tx.Type(collection)
 	nb := bindnode.Prototype(nil, nt).NewBuilder()
 	if err := e.assignValue(ctx, nt, value, nb); err != nil {
 		return "", err
 	}
-	id, err := uuid.NewRandom()
-	if err != nil {
-		return "", err
-	}
-	lnk, err := e.store.Store(ctx, nb.Build())
-	if err != nil {
-		return "", err
-	}
-	rootNode, err := e.store.Load(ctx, e.rootLink, e.store.Prototype(core.RootTypeName))
-	if err != nil {
-		return "", err
-	}
-	rootPath := datamodel.ParsePath(collection + "/" + id.String())
-	rootNode, err = e.store.SetNode(ctx, rootPath, rootNode, basicnode.NewLink(lnk))
-	if err != nil {
-		return "", err
-	}
-	e.rootLink, err = e.store.Store(ctx, rootNode)
-	if err != nil {
-		return "", err
-	}
-	return id.String(), nil
+	return e.tx.CreateDocument(ctx, collection, nb.Build())
 }
 
 func (e *executionContext) assignValue(ctx context.Context, t schema.Type, value any, na datamodel.NodeAssembler) error {
-	if e.store.IsRelation(t) {
-		return e.assignReference(ctx, t, value.(map[string]any), na)
+	collection, ok := core.RelationName(t)
+	if ok {
+		return e.assignReference(ctx, collection, value.(map[string]any), na)
 	}
 	switch v := t.(type) {
 	case *schema.TypeBool:
@@ -81,13 +59,13 @@ func (e *executionContext) assignLink(value string, na datamodel.NodeAssembler) 
 	return na.AssignLink(cidlink.Link{Cid: id})
 }
 
-func (e *executionContext) assignReference(ctx context.Context, t schema.Type, value map[string]any, na datamodel.NodeAssembler) error {
+func (e *executionContext) assignReference(ctx context.Context, collection string, value map[string]any, na datamodel.NodeAssembler) error {
 	// if the provided input contains an id use that instead
 	id, ok := value["_id"].(string)
 	if ok {
 		return na.AssignString(id)
 	}
-	id, err := e.createDocument(ctx, t.Name(), value)
+	id, err := e.createDocument(ctx, collection, value)
 	if err != nil {
 		return err
 	}

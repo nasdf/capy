@@ -19,9 +19,8 @@ const (
 	RootSchemaFieldName  = "Schema"
 	RootParentsFieldName = "Parents"
 
-	LinkSuffix       = "Link"
-	DocumentSuffix   = "+Document"
-	CollectionSuffix = "+Collection"
+	LinkPrefix     = "&"
+	RelationPrefix = "~"
 )
 
 var (
@@ -39,19 +38,6 @@ var (
 	TypeStringList         = schema.SpawnList("[String]", TypeString.Name(), true)
 	TypeNotNullStringList  = schema.SpawnList("[String!]", TypeString.Name(), false)
 )
-
-// Prototype returns a NodePrototype for the given Node.
-func Prototype(n datamodel.Node) datamodel.NodePrototype {
-	tn, ok := n.(schema.TypedNode)
-	if !ok {
-		return basicnode.Prototype.Any
-	}
-	lnk, ok := tn.Type().(*schema.TypeLink)
-	if ok && lnk.HasReferencedType() {
-		return bindnode.Prototype(nil, lnk.ReferencedType())
-	}
-	return bindnode.Prototype(nil, tn.Type())
-}
 
 // SpawnTypeSystem creates an IPLD TypeSystem from the given GraphQL schema.
 func SpawnTypeSystem(s *ast.Schema) (*schema.TypeSystem, []error) {
@@ -80,21 +66,21 @@ func SpawnTypeSystem(s *ast.Schema) (*schema.TypeSystem, []error) {
 		case ast.Object:
 			fields := make([]schema.StructField, len(d.Fields))
 			for i, f := range d.Fields {
-				fields[i] = schema.SpawnStructField(f.Name, strings.TrimSuffix(f.Type.String(), "!"), !f.Type.NonNull, !f.Type.NonNull)
+				fields[i] = schema.SpawnStructField(f.Name, TypeName(f.Type, s), !f.Type.NonNull, !f.Type.NonNull)
 			}
-			types = append(types, schema.SpawnStruct(d.Name+DocumentSuffix, fields, schema.SpawnStructRepresentationMap(nil)))
+			types = append(types, schema.SpawnStruct(d.Name, fields, schema.SpawnStructRepresentationMap(nil)))
 
-			relationType := schema.SpawnString(d.Name)
+			relationType := schema.SpawnString(RelationPrefix + d.Name)
 			types = append(types, relationType)
 
-			linkType := schema.SpawnLinkReference(d.Name+LinkSuffix, d.Name+DocumentSuffix)
+			linkType := schema.SpawnLinkReference(LinkPrefix+d.Name, d.Name)
 			types = append(types, linkType)
 
-			collectionType := schema.SpawnMap(d.Name+CollectionSuffix, TypeString.Name(), linkType.Name(), false)
+			collectionType := schema.SpawnMap(fmt.Sprintf("{%s:%s}", TypeString.Name(), linkType.Name()), TypeString.Name(), linkType.Name(), false)
 			types = append(types, collectionType)
 
-			types = append(types, schema.SpawnList(fmt.Sprintf("[%s]", d.Name), relationType.Name(), true))
-			types = append(types, schema.SpawnList(fmt.Sprintf("[%s!]", d.Name), relationType.Name(), false))
+			types = append(types, schema.SpawnList(fmt.Sprintf("[%s]", relationType.Name()), relationType.Name(), true))
+			types = append(types, schema.SpawnList(fmt.Sprintf("[%s!]", relationType.Name()), relationType.Name(), false))
 
 			rootFields = append(rootFields, schema.SpawnStructField(d.Name, collectionType.Name(), false, false))
 
@@ -119,4 +105,40 @@ func SpawnTypeSystem(s *ast.Schema) (*schema.TypeSystem, []error) {
 	types = append(types, schema.SpawnStruct(RootTypeName, rootFields, schema.SpawnStructRepresentationMap(nil)))
 
 	return schema.SpawnTypeSystem(types...)
+}
+
+// TypeName returns the name of the type for the given GraphQL type.
+func TypeName(t *ast.Type, s *ast.Schema) string {
+	if t.Elem != nil && t.NonNull {
+		return fmt.Sprintf("[%s!]", TypeName(t.Elem, s))
+	}
+	if t.Elem != nil {
+		return fmt.Sprintf("[%s]", TypeName(t.Elem, s))
+	}
+	def := s.Types[t.NamedType]
+	if def.Kind == ast.Object {
+		return RelationPrefix + t.NamedType
+	}
+	return t.NamedType
+}
+
+// Relation returns the name of the related document and a bool indicing if the field is a relation.
+func RelationName(t schema.Type) (string, bool) {
+	if !strings.HasPrefix(t.Name(), RelationPrefix) {
+		return "", false
+	}
+	return strings.TrimPrefix(t.Name(), RelationPrefix), true
+}
+
+// Prototype returns a NodePrototype for the given Node.
+func Prototype(n datamodel.Node) datamodel.NodePrototype {
+	tn, ok := n.(schema.TypedNode)
+	if !ok {
+		return basicnode.Prototype.Any
+	}
+	lnk, ok := tn.Type().(*schema.TypeLink)
+	if ok && lnk.HasReferencedType() {
+		return bindnode.Prototype(nil, lnk.ReferencedType())
+	}
+	return bindnode.Prototype(nil, tn.Type())
 }

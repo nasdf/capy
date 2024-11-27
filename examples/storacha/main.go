@@ -27,11 +27,11 @@ var mutation string
 
 func main() {
 	ctx := context.Background()
-	db, err := capy.Open(ctx, storage.NewMemory(), schema)
+	c, err := capy.Open(ctx, storage.NewMemory(), schema)
 	if err != nil {
 		panic(err)
 	}
-	res, err := db.Execute(ctx, graphql.QueryParams{Query: mutation})
+	res, err := c.Execute(ctx, graphql.QueryParams{Query: mutation})
 	if err != nil {
 		panic(err)
 	}
@@ -45,7 +45,7 @@ func main() {
 	}
 	defer file.Close()
 
-	rootLink, err := db.Store().RootLink(ctx)
+	rootLink, err := c.DB.RootLink(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -57,7 +57,7 @@ func main() {
 	ssb := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any)
 	sel := ssb.ExploreRecursive(selector.RecursionLimitNone(), ssb.ExploreAll(ssb.ExploreRecursiveEdge()))
 
-	w, err := car.NewSelectiveWriter(ctx, db.Store().LinkSystem(), root, sel.Node())
+	w, err := car.NewSelectiveWriter(ctx, c.DB.LinkSystem(), root, sel.Node())
 	if err != nil {
 		panic(err)
 	}

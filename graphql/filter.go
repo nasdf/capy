@@ -33,9 +33,6 @@ func (e *executionContext) filterDocument(ctx context.Context, n schema.TypedNod
 	if value == nil {
 		return true, nil
 	}
-	if n.Kind() == datamodel.Kind_Link {
-		return e.filterLink(ctx, n, value)
-	}
 	for key, val := range value.(map[string]any) {
 		switch key {
 		case andFilter:
@@ -71,12 +68,13 @@ func (e *executionContext) filterField(ctx context.Context, n schema.TypedNode, 
 	if value == nil {
 		return true, nil
 	}
-	if e.store.IsRelation(n.Type()) {
+	collection, ok := core.RelationName(n.Type())
+	if ok {
 		id, err := n.AsString()
 		if err != nil {
 			return false, err
 		}
-		return e.filterRelation(ctx, n.Type().Name(), id, value.(map[string]any))
+		return e.filterRelation(ctx, collection, id, value.(map[string]any))
 	}
 	for key, val := range value.(map[string]any) {
 		switch key {
@@ -142,38 +140,15 @@ func (e *executionContext) filterField(ctx context.Context, n schema.TypedNode, 
 	return true, nil
 }
 
-func (e *executionContext) filterLink(ctx context.Context, n schema.TypedNode, value any) (bool, error) {
-	if value == nil {
-		return true, nil
-	}
-	lnk, err := n.AsLink()
-	if err != nil {
-		return false, err
-	}
-	obj, err := e.store.Load(ctx, lnk, core.Prototype(n))
-	if err != nil {
-		return false, err
-	}
-	return e.filterDocument(ctx, obj.(schema.TypedNode), value)
-}
-
 func (e *executionContext) filterRelation(ctx context.Context, collection, id string, value any) (bool, error) {
 	if value == nil {
 		return true, nil
 	}
-	rootNode, err := e.store.RootNode(ctx)
+	doc, err := e.tx.ReadDocument(ctx, collection, id)
 	if err != nil {
 		return false, err
 	}
-	collectionNode, err := rootNode.LookupByString(collection)
-	if err != nil {
-		return false, err
-	}
-	linkNode, err := collectionNode.LookupByString(id)
-	if err != nil {
-		return false, err
-	}
-	return e.filterLink(ctx, linkNode.(schema.TypedNode), value)
+	return e.filterDocument(ctx, doc.(schema.TypedNode), value)
 }
 
 func (e *executionContext) filterAnd(ctx context.Context, n schema.TypedNode, value any) (bool, error) {

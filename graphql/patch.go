@@ -7,7 +7,6 @@ import (
 	"github.com/nasdf/capy/core"
 
 	"github.com/ipld/go-ipld-prime/datamodel"
-	"github.com/ipld/go-ipld-prime/node/basicnode"
 	"github.com/ipld/go-ipld-prime/schema"
 )
 
@@ -17,9 +16,6 @@ const (
 )
 
 func (e *executionContext) patchDocument(ctx context.Context, collection, id string, n schema.TypedNode, value any) error {
-	if n.Kind() == datamodel.Kind_Link {
-		return e.patchLink(ctx, collection, id, n, value)
-	}
 	nb := n.Prototype().NewBuilder()
 	ma, err := nb.BeginMap(n.Length())
 	if err != nil {
@@ -51,36 +47,16 @@ func (e *executionContext) patchDocument(ctx context.Context, collection, id str
 	if err != nil {
 		return err
 	}
-	lnk, err := e.store.Store(ctx, nb.Build())
-	if err != nil {
-		return err
-	}
-	rootNode, err := e.store.Load(ctx, e.rootLink, e.store.Prototype(core.RootTypeName))
-	if err != nil {
-		return err
-	}
-	rootPath := datamodel.ParsePath(collection + "/" + id)
-	rootNode, err = e.store.SetNode(ctx, rootPath, rootNode, basicnode.NewLink(lnk))
-	if err != nil {
-		return err
-	}
-	e.rootLink, err = e.store.Store(ctx, rootNode)
-	if err != nil {
-		return err
-	}
-	return nil
+	return e.tx.UpdateDocument(ctx, collection, id, nb.Build())
 }
 
-func (b *executionContext) patchField(ctx context.Context, t schema.Type, n datamodel.Node, value any, na datamodel.NodeAssembler) error {
+func (e *executionContext) patchField(ctx context.Context, t schema.Type, n datamodel.Node, value any, na datamodel.NodeAssembler) error {
 	if value == nil {
 		return na.AssignNode(n)
 	}
-	if b.store.IsRelation(t) {
-		id, err := n.AsString()
-		if err != nil {
-			return err
-		}
-		return b.patchRelation(ctx, t.Name(), id, value)
+	collection, ok := core.RelationName(t)
+	if ok {
+		return e.patchRelation(ctx, collection, n, value)
 	}
 	patch := value.(map[string]any)
 	if len(patch) != 1 {
@@ -92,47 +68,27 @@ func (b *executionContext) patchField(ctx context.Context, t schema.Type, n data
 	}
 	switch op {
 	case setPatch:
-		return b.assignValue(ctx, t, patch[op], na)
+		return e.assignValue(ctx, t, patch[op], na)
 	case appendPatch:
-		return b.patchListAppend(ctx, t, n, patch[op], na)
+		return e.patchListAppend(ctx, t, n, patch[op], na)
 	default:
 		return fmt.Errorf("invalid patch operation %s", op)
 	}
 }
 
-func (b *executionContext) patchLink(ctx context.Context, collection, id string, n schema.TypedNode, value any) error {
-	lnk, err := n.AsLink()
+func (e *executionContext) patchRelation(ctx context.Context, collection string, n datamodel.Node, value any) error {
+	id, err := n.AsString()
 	if err != nil {
 		return err
 	}
-	obj, err := b.store.Load(ctx, lnk, core.Prototype(n))
+	doc, err := e.tx.ReadDocument(ctx, collection, id)
 	if err != nil {
 		return err
 	}
-	return b.patchDocument(ctx, collection, id, obj.(schema.TypedNode), value)
+	return e.patchDocument(ctx, collection, id, doc.(schema.TypedNode), value)
 }
 
-func (b *executionContext) patchRelation(ctx context.Context, collection, id string, value any) error {
-	rootLink, err := b.store.RootLink(ctx)
-	if err != nil {
-		return err
-	}
-	rootNode, err := b.store.Load(ctx, rootLink, b.store.Prototype(core.RootTypeName))
-	if err != nil {
-		return err
-	}
-	collectionNode, err := rootNode.LookupByString(collection)
-	if err != nil {
-		return err
-	}
-	linkNode, err := collectionNode.LookupByString(id)
-	if err != nil {
-		return err
-	}
-	return b.patchLink(ctx, collection, id, linkNode.(schema.TypedNode), value)
-}
-
-func (b *executionContext) patchListAppend(ctx context.Context, t schema.Type, n datamodel.Node, value any, na datamodel.NodeAssembler) error {
+func (e *executionContext) patchListAppend(ctx context.Context, t schema.Type, n datamodel.Node, value any, na datamodel.NodeAssembler) error {
 	// value is a single item or a list of items
 	vals, ok := value.([]any)
 	if !ok {
@@ -155,7 +111,7 @@ func (b *executionContext) patchListAppend(ctx context.Context, t schema.Type, n
 	}
 	vt := t.(*schema.TypeList).ValueType()
 	for _, v := range vals {
-		err = b.assignValue(ctx, vt, v, la.AssembleValue())
+		err = e.assignValue(ctx, vt, v, la.AssembleValue())
 		if err != nil {
 			return err
 		}
