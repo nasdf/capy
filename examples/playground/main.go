@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"github.com/nasdf/capy/storage"
 
 	"github.com/99designs/gqlgen/graphql/playground"
+	jsonc "github.com/ipld/go-ipld-prime/codec/json"
 )
 
 //go:embed schema.graphql
@@ -32,11 +34,48 @@ func main() {
 		panic(err)
 	}
 	http.Handle("/", playground.Handler("Capy", "/query"))
-	http.Handle("/query", graphql.Handler(db))
+	http.Handle("/query", handler(db))
 
 	fmt.Printf("Open a browser and navigate to %s\n", address)
 	err = http.ListenAndServe(address, nil)
 	if err != nil {
 		panic(err)
 	}
+}
+
+// handler returns an http.handler that can serve GraphQL requests.
+func handler(c *capy.Capy) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var params graphql.QueryParams
+		var err error
+		switch r.Method {
+		case http.MethodGet:
+			values := r.URL.Query()
+			params.Query = values.Get("query")
+			params.OperationName = values.Get("operationName")
+			if values.Has("variables") {
+				err = json.Unmarshal([]byte(values.Get("variables")), &params.Variables)
+			}
+		case http.MethodPost:
+			err = json.NewDecoder(r.Body).Decode(&params)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if err != nil {
+			http.Error(w, fmt.Sprintf("failed to parse request: %v", err), http.StatusBadRequest)
+			return
+		}
+		res, err := c.Execute(r.Context(), params)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		err = jsonc.Encode(res, w)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	})
 }
