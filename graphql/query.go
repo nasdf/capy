@@ -112,12 +112,6 @@ func (e *executionContext) queryDocument(ctx context.Context, collection string,
 			return err
 		}
 		switch f.Name {
-		case "_link":
-			err = va.AssignString(ctx.Value(linkContextKey).(string))
-			if err != nil {
-				return err
-			}
-
 		case "__typename":
 			err = va.AssignString(collection)
 			if err != nil {

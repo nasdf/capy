@@ -15,10 +15,7 @@ import (
 
 type contextKey string
 
-var (
-	idContextKey   = contextKey("id")
-	linkContextKey = contextKey("link")
-)
+var idContextKey = contextKey("id")
 
 const (
 	createOperationPrefix = "create"

@@ -1,17 +1,14 @@
 mutation {
-	create_Film(data: {
+	createFilm(data: {
 		title: "Beetlejuice", 
 		director: {name: "Tim Burton"}, 
 		actors: [{name: "Michael Keaton"}, {name: "Winona Ryder"}]
 	}) {
-		_link
 		title
 		actors {
-			_link
 			name
 		}
 		director {
-			_link
 			name
 		}
 	}
