@@ -77,17 +77,25 @@ func (e *executionContext) listQuery(ctx context.Context, field graphql.Collecte
 	if err != nil {
 		return err
 	}
+	iter, err := e.tx.DocumentIterator(ctx, collection)
+	if err != nil {
+		return err
+	}
 	args := field.ArgumentMap(e.params.Variables)
-	err = e.tx.ForEachDocument(ctx, collection, func(id string, doc datamodel.Node) error {
+	for !iter.Done() {
+		id, doc, err := iter.Next(ctx)
+		if err != nil {
+			return err
+		}
 		ctx = context.WithValue(ctx, idContextKey, id)
 		match, err := e.filterDocument(ctx, collection, doc, args["filter"])
 		if err != nil || !match {
 			return err
 		}
-		return e.queryDocument(ctx, collection, doc, field, la.AssembleValue())
-	})
-	if err != nil {
-		return err
+		err = e.queryDocument(ctx, collection, doc, field, la.AssembleValue())
+		if err != nil {
+			return err
+		}
 	}
 	return la.Finish()
 }

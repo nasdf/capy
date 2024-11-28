@@ -2,7 +2,6 @@ package graphql
 
 import (
 	"context"
-	"slices"
 	"strings"
 
 	"github.com/99designs/gqlgen/graphql"
@@ -66,30 +65,43 @@ func (e *executionContext) updateMutation(ctx context.Context, field graphql.Col
 	filter, _ := args["filter"].(map[string]any)
 	patch, _ := args["patch"].(map[string]any)
 
+	iter, err := e.tx.DocumentIterator(ctx, collection)
+	if err != nil {
+		return err
+	}
+
 	var ids []string
-	err := e.tx.ForEachDocument(ctx, collection, func(id string, doc datamodel.Node) error {
+	for !iter.Done() {
+		id, doc, err := iter.Next(ctx)
+		if err != nil {
+			return err
+		}
 		ctx = context.WithValue(ctx, idContextKey, id)
 		match, err := e.filterDocument(ctx, collection, doc, filter)
 		if err != nil || !match {
 			return err
 		}
+		err = e.patchDocument(ctx, collection, id, doc, patch)
+		if err != nil {
+			return err
+		}
 		ids = append(ids, id)
-		return e.patchDocument(ctx, collection, id, doc, patch)
-	})
-	if err != nil {
-		return err
 	}
 	la, err := na.BeginList(0)
 	if err != nil {
 		return err
 	}
-	err = e.tx.ForEachDocument(ctx, collection, func(id string, doc datamodel.Node) error {
-		if !slices.Contains(ids, id) {
-			return nil
+	for _, id := range ids {
+		doc, err := e.tx.ReadDocument(ctx, collection, id)
+		if err != nil {
+			return err
 		}
 		ctx = context.WithValue(ctx, idContextKey, id)
-		return e.queryDocument(ctx, collection, doc, field, la.AssembleValue())
-	})
+		err = e.queryDocument(ctx, collection, doc, field, la.AssembleValue())
+		if err != nil {
+			return err
+		}
+	}
 	return la.Finish()
 }
 
@@ -101,7 +113,15 @@ func (e *executionContext) deleteMutation(ctx context.Context, field graphql.Col
 	if err != nil {
 		return err
 	}
-	err = e.tx.ForEachDocument(ctx, collection, func(id string, doc datamodel.Node) error {
+	iter, err := e.tx.DocumentIterator(ctx, collection)
+	if err != nil {
+		return err
+	}
+	for !iter.Done() {
+		id, doc, err := iter.Next(ctx)
+		if err != nil {
+			return err
+		}
 		ctx = context.WithValue(ctx, idContextKey, id)
 		match, err := e.filterDocument(ctx, collection, doc, filter)
 		if err != nil || !match {
@@ -111,10 +131,10 @@ func (e *executionContext) deleteMutation(ctx context.Context, field graphql.Col
 		if err != nil {
 			return err
 		}
-		return e.tx.DeleteDocument(ctx, collection, id)
-	})
-	if err != nil {
-		return err
+		err = e.tx.DeleteDocument(ctx, collection, id)
+		if err != nil {
+			return err
+		}
 	}
 	return la.Finish()
 }

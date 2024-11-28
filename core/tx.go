@@ -18,43 +18,9 @@ type Transaction struct {
 	rootNode datamodel.Node
 }
 
-// ForEachDocument calls the given callback for each document in the given collection.
-func (tx *Transaction) ForEachDocument(ctx context.Context, collection string, fn func(id string, doc datamodel.Node) error) error {
-	documentsPath := DocumentsPath(collection)
-	documentsNode, err := tx.GetNode(ctx, documentsPath, tx.rootNode)
-	if err != nil {
-		return err
-	}
-	iter := documentsNode.MapIterator()
-	for !iter.Done() {
-		k, v, err := iter.Next()
-		if err != nil {
-			return err
-		}
-		id, err := k.AsString()
-		if err != nil {
-			return err
-		}
-		lnk, err := v.AsLink()
-		if err != nil {
-			return err
-		}
-		doc, err := tx.Load(ctx, lnk, basicnode.Prototype.Map)
-		if err != nil {
-			return err
-		}
-		err = fn(id, doc)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // ReadDocument returns the document in the given collection with the given unique id.
 func (tx *Transaction) ReadDocument(ctx context.Context, collection, id string) (datamodel.Node, error) {
-	rootPath := DocumentPath(collection, id)
-	return tx.GetNode(ctx, rootPath, tx.rootNode)
+	return tx.GetNode(ctx, DocumentPath(collection, id), tx.rootNode)
 }
 
 // CreateDocument creates a new document in the collection with the given name and returns its unique id.
@@ -70,7 +36,7 @@ func (tx *Transaction) CreateDocument(ctx context.Context, collection string, no
 	if err != nil {
 		return "", err
 	}
-	rootPath := datamodel.ParsePath(RootCollectionsFieldName + "/" + collection + "/" + CollectionDocumentsFieldName + "/" + id.String())
+	rootPath := DocumentPath(collection, id.String())
 	rootNode, err := tx.SetNode(ctx, rootPath, tx.rootNode, basicnode.NewLink(lnk))
 	if err != nil {
 		return "", err
@@ -111,26 +77,31 @@ func (tx *Transaction) DeleteDocument(ctx context.Context, collection, id string
 	return nil
 }
 
+// DocumentIterator returns a new iterator that can be used to iterate through all documents in a collection.
+func (tx *Transaction) DocumentIterator(ctx context.Context, collection string) (*DocumentIterator, error) {
+	documentsPath := DocumentsPath(collection)
+	documentsNode, err := tx.GetNode(ctx, documentsPath, tx.rootNode)
+	if err != nil {
+		return nil, err
+	}
+	iter := documentsNode.MapIterator()
+	return &DocumentIterator{
+		db: tx.DB,
+		it: iter,
+	}, nil
+}
+
 // Commit finalizes the transaction and updates the store root link.
 func (tx *Transaction) Commit(ctx context.Context) error {
 	if tx.readOnly {
 		return nil
 	}
-	parents := basicnode.Prototype.List.NewBuilder()
-	la, err := parents.BeginList(1)
-	if err != nil {
-		return err
-	}
-	err = la.AssembleValue().AssignLink(tx.rootLink)
-	if err != nil {
-		return err
-	}
-	err = la.Finish()
+	parentsNode, err := BuildRootParentsNode(tx.DB, tx.rootLink)
 	if err != nil {
 		return err
 	}
 	rootPath := datamodel.ParsePath(RootParentsFieldName)
-	rootNode, err := tx.SetNode(ctx, rootPath, tx.rootNode, parents.Build())
+	rootNode, err := tx.SetNode(ctx, rootPath, tx.rootNode, parentsNode)
 	if err != nil {
 		return err
 	}

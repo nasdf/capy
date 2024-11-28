@@ -32,17 +32,18 @@ func (e *executionContext) patchDocument(ctx context.Context, collection, id str
 		if _, ok := err.(datamodel.ErrNotExists); err != nil && !ok {
 			return err
 		}
+		patch, ok := value[field.Name]
+		if !ok && nv == nil {
+			continue // ignore empty fields
+		}
 		na, err := ma.AssembleEntry(field.Name)
 		if err != nil {
 			return err
 		}
-		patch, ok := value[field.Name]
 		if ok {
 			err = e.patchValue(ctx, field.Type, nv, patch, na)
-		} else if nv != nil {
-			err = na.AssignNode(nv)
 		} else {
-			err = na.AssignNull()
+			err = na.AssignNode(nv)
 		}
 		if err != nil {
 			return err
