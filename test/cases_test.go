@@ -10,7 +10,6 @@ import (
 	"text/template"
 
 	"github.com/nasdf/capy"
-	"github.com/nasdf/capy/core"
 	"github.com/nasdf/capy/graphql"
 	"github.com/nasdf/capy/storage"
 
@@ -37,7 +36,7 @@ func (tc TestCase) Run(t *testing.T) {
 	require.NoError(t, err, "failed to create db")
 
 	for _, op := range tc.Operations {
-		docs, err := core.Dump(ctx, c.DB)
+		docs, err := c.DB.Dump(ctx)
 		require.NoError(t, err, "failed to load documents")
 
 		query, err := op.QueryTemplate(ctx, docs)

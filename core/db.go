@@ -2,10 +2,11 @@ package core
 
 import (
 	"context"
+	"fmt"
+	"sync"
 
 	"github.com/nasdf/capy/storage"
 
-	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/linking"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
@@ -17,18 +18,20 @@ import (
 const RootLinkKey = "root"
 
 type DB struct {
-	storage storage.Storage
-	links   linking.LinkSystem
+	store    storage.Storage
+	links    linking.LinkSystem
+	rootLink datamodel.Link
+	rootLock sync.RWMutex
 }
 
-func Open(ctx context.Context, storage storage.Storage, schema string) (*DB, error) {
+func Open(ctx context.Context, store storage.Storage, schema string) (*DB, error) {
 	links := cidlink.DefaultLinkSystem()
-	links.SetReadStorage(storage)
-	links.SetWriteStorage(storage)
+	links.SetReadStorage(store)
+	links.SetWriteStorage(store)
 
 	db := &DB{
-		storage: storage,
-		links:   links,
+		store: store,
+		links: links,
 	}
 
 	rootNode, err := BuildRootNode(ctx, db, schema)
@@ -39,43 +42,17 @@ func Open(ctx context.Context, storage storage.Storage, schema string) (*DB, err
 	if err != nil {
 		return nil, err
 	}
-	err = db.SetRootLink(ctx, rootLink)
+	err = store.Put(ctx, RootLinkKey, []byte(rootLink.String()))
 	if err != nil {
 		return nil, err
 	}
+	db.rootLink = rootLink
 	return db, nil
 }
 
 // LinkSystem returns the linking.LinkSystem used to store and load data.
 func (db *DB) LinkSystem() *linking.LinkSystem {
 	return &db.links
-}
-
-// RootNode returns the root node from the db.
-func (db *DB) RootNode(ctx context.Context) (datamodel.Node, error) {
-	rootLink, err := db.RootLink(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return db.Load(ctx, rootLink, basicnode.Prototype.Map)
-}
-
-// RootLink returns the current root link from the db.
-func (db *DB) RootLink(ctx context.Context) (datamodel.Link, error) {
-	data, err := db.storage.Get(ctx, RootLinkKey)
-	if err != nil {
-		return nil, err
-	}
-	id, err := cid.Decode(string(data))
-	if err != nil {
-		return nil, err
-	}
-	return cidlink.Link{Cid: id}, nil
-}
-
-// SetRootLink sets the db root link to the given link value.
-func (db *DB) SetRootLink(ctx context.Context, lnk datamodel.Link) error {
-	return db.storage.Put(ctx, RootLinkKey, []byte(lnk.String()))
 }
 
 // Load returns the node matching the given link and built using the given prototype.
@@ -106,20 +83,115 @@ func (db *DB) SetNode(ctx context.Context, path datamodel.Path, node datamodel.N
 	return db.Traversal(ctx).FocusedTransform(node, path, fn, true)
 }
 
+// RootLink returns the current root link from the db.
+func (db *DB) RootLink() datamodel.Link {
+	db.rootLock.RLock()
+	defer db.rootLock.RUnlock()
+
+	return db.rootLink
+}
+
 // Transaction returns a new transaction that can be used to modify documents.
 func (db *DB) Transaction(ctx context.Context, readOnly bool) (*Transaction, error) {
-	rootLink, err := db.RootLink(ctx)
-	if err != nil {
-		return nil, err
-	}
-	rootNode, err := db.Load(ctx, rootLink, basicnode.Prototype.Any)
+	db.rootLock.RLock()
+	defer db.rootLock.RUnlock()
+
+	rootNode, err := db.Load(ctx, db.rootLink, basicnode.Prototype.Map)
 	if err != nil {
 		return nil, err
 	}
 	return &Transaction{
-		DB:       db,
+		db:       db,
 		readOnly: readOnly,
 		rootNode: rootNode,
-		rootLink: rootLink,
+		rootLink: db.rootLink,
 	}, nil
+}
+
+// Commit creates a new commit from the given link using the contents of the given node.
+func (db *DB) Commit(ctx context.Context, rootLink datamodel.Link, rootNode datamodel.Node) error {
+	db.rootLock.Lock()
+	defer db.rootLock.Unlock()
+
+	if db.rootLink != rootLink {
+		return fmt.Errorf("transaction conflict")
+	}
+	parentsNode, err := BuildRootParentsNode(db, rootLink)
+	if err != nil {
+		return err
+	}
+	rootPath := datamodel.ParsePath(RootParentsFieldName)
+	rootNode, err = db.SetNode(ctx, rootPath, rootNode, parentsNode)
+	if err != nil {
+		return err
+	}
+	rootLink, err = db.Store(ctx, rootNode)
+	if err != nil {
+		return err
+	}
+	err = db.store.Put(ctx, RootLinkKey, []byte(rootLink.String()))
+	if err != nil {
+		return err
+	}
+	db.rootLink = rootLink
+	return nil
+}
+
+// Dump returns a map of collections to document ids.
+//
+// This function is primarily used for testing.
+func (db *DB) Dump(ctx context.Context) (map[string][]string, error) {
+	rootNode, err := db.Load(ctx, db.RootLink(), basicnode.Prototype.Map)
+	if err != nil {
+		return nil, err
+	}
+	collectionsLinkNode, err := rootNode.LookupByString(RootCollectionsFieldName)
+	if err != nil {
+		return nil, err
+	}
+	collectionsLink, err := collectionsLinkNode.AsLink()
+	if err != nil {
+		return nil, err
+	}
+	collectionsNode, err := db.Load(ctx, collectionsLink, basicnode.Prototype.Map)
+	if err != nil {
+		return nil, err
+	}
+	docs := make(map[string][]string)
+	iter := collectionsNode.MapIterator()
+	for !iter.Done() {
+		k, v, err := iter.Next()
+		if err != nil {
+			return nil, err
+		}
+		collection, err := k.AsString()
+		if err != nil {
+			return nil, err
+		}
+		collectionLink, err := v.AsLink()
+		if err != nil {
+			return nil, err
+		}
+		collectionNode, err := db.Load(ctx, collectionLink, basicnode.Prototype.Map)
+		if err != nil {
+			return nil, err
+		}
+		documentsNode, err := collectionNode.LookupByString(CollectionDocumentsFieldName)
+		if err != nil {
+			return nil, err
+		}
+		documentIter := documentsNode.MapIterator()
+		for !documentIter.Done() {
+			k, _, err := documentIter.Next()
+			if err != nil {
+				return nil, err
+			}
+			id, err := k.AsString()
+			if err != nil {
+				return nil, err
+			}
+			docs[collection] = append(docs[collection], id)
+		}
+	}
+	return docs, nil
 }

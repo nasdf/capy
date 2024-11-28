@@ -45,10 +45,7 @@ func main() {
 	}
 	defer file.Close()
 
-	rootLink, err := c.DB.RootLink(ctx)
-	if err != nil {
-		panic(err)
-	}
+	rootLink := c.DB.RootLink()
 	root, err := cid.Decode(rootLink.String())
 	if err != nil {
 		panic(err)

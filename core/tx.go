@@ -12,7 +12,7 @@ import (
 var ErrReadOnlyTx = errors.New("transaction is read only")
 
 type Transaction struct {
-	*DB
+	db       *DB
 	readOnly bool
 	rootLink datamodel.Link
 	rootNode datamodel.Node
@@ -20,7 +20,7 @@ type Transaction struct {
 
 // ReadDocument returns the document in the given collection with the given unique id.
 func (tx *Transaction) ReadDocument(ctx context.Context, collection, id string) (datamodel.Node, error) {
-	return tx.GetNode(ctx, DocumentPath(collection, id), tx.rootNode)
+	return tx.db.GetNode(ctx, DocumentPath(collection, id), tx.rootNode)
 }
 
 // CreateDocument creates a new document in the collection with the given name and returns its unique id.
@@ -32,12 +32,12 @@ func (tx *Transaction) CreateDocument(ctx context.Context, collection string, no
 	if err != nil {
 		return "", err
 	}
-	lnk, err := tx.Store(ctx, node)
+	lnk, err := tx.db.Store(ctx, node)
 	if err != nil {
 		return "", err
 	}
 	rootPath := DocumentPath(collection, id.String())
-	rootNode, err := tx.SetNode(ctx, rootPath, tx.rootNode, basicnode.NewLink(lnk))
+	rootNode, err := tx.db.SetNode(ctx, rootPath, tx.rootNode, basicnode.NewLink(lnk))
 	if err != nil {
 		return "", err
 	}
@@ -50,12 +50,12 @@ func (tx *Transaction) UpdateDocument(ctx context.Context, collection, id string
 	if tx.readOnly {
 		return ErrReadOnlyTx
 	}
-	lnk, err := tx.Store(ctx, node)
+	lnk, err := tx.db.Store(ctx, node)
 	if err != nil {
 		return err
 	}
 	rootPath := DocumentPath(collection, id)
-	rootNode, err := tx.SetNode(ctx, rootPath, tx.rootNode, basicnode.NewLink(lnk))
+	rootNode, err := tx.db.SetNode(ctx, rootPath, tx.rootNode, basicnode.NewLink(lnk))
 	if err != nil {
 		return err
 	}
@@ -69,7 +69,7 @@ func (tx *Transaction) DeleteDocument(ctx context.Context, collection, id string
 		return ErrReadOnlyTx
 	}
 	rootPath := DocumentPath(collection, id)
-	rootNode, err := tx.SetNode(ctx, rootPath, tx.rootNode, nil)
+	rootNode, err := tx.db.SetNode(ctx, rootPath, tx.rootNode, nil)
 	if err != nil {
 		return err
 	}
@@ -80,14 +80,13 @@ func (tx *Transaction) DeleteDocument(ctx context.Context, collection, id string
 // DocumentIterator returns a new iterator that can be used to iterate through all documents in a collection.
 func (tx *Transaction) DocumentIterator(ctx context.Context, collection string) (*DocumentIterator, error) {
 	documentsPath := DocumentsPath(collection)
-	documentsNode, err := tx.GetNode(ctx, documentsPath, tx.rootNode)
+	documentsNode, err := tx.db.GetNode(ctx, documentsPath, tx.rootNode)
 	if err != nil {
 		return nil, err
 	}
-	iter := documentsNode.MapIterator()
 	return &DocumentIterator{
-		db: tx.DB,
-		it: iter,
+		db: tx.db,
+		it: documentsNode.MapIterator(),
 	}, nil
 }
 
@@ -96,18 +95,5 @@ func (tx *Transaction) Commit(ctx context.Context) error {
 	if tx.readOnly {
 		return nil
 	}
-	parentsNode, err := BuildRootParentsNode(tx.DB, tx.rootLink)
-	if err != nil {
-		return err
-	}
-	rootPath := datamodel.ParsePath(RootParentsFieldName)
-	rootNode, err := tx.SetNode(ctx, rootPath, tx.rootNode, parentsNode)
-	if err != nil {
-		return err
-	}
-	rootLink, err := tx.Store(ctx, rootNode)
-	if err != nil {
-		return err
-	}
-	return tx.SetRootLink(ctx, rootLink)
+	return tx.db.Commit(ctx, tx.rootLink, tx.rootNode)
 }
