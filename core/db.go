@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"errors"
 
 	"github.com/nasdf/capy/storage"
 
@@ -11,11 +10,7 @@ import (
 	"github.com/ipld/go-ipld-prime/linking"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
-	"github.com/ipld/go-ipld-prime/node/bindnode"
-	"github.com/ipld/go-ipld-prime/schema"
 	"github.com/ipld/go-ipld-prime/traversal"
-	"github.com/vektah/gqlparser/v2"
-	"github.com/vektah/gqlparser/v2/ast"
 )
 
 // RootLinkKey is the name of the key for the root link.
@@ -24,19 +19,9 @@ const RootLinkKey = "root"
 type DB struct {
 	storage storage.Storage
 	links   linking.LinkSystem
-	types   *schema.TypeSystem
 }
 
 func Open(ctx context.Context, storage storage.Storage, schema string) (*DB, error) {
-	as, err := gqlparser.LoadSchema(&ast.Source{Input: schema})
-	if err != nil {
-		return nil, err
-	}
-	types, errs := SpawnTypeSystem(as)
-	if len(errs) > 0 {
-		return nil, errors.Join(errs...)
-	}
-
 	links := cidlink.DefaultLinkSystem()
 	links.SetReadStorage(storage)
 	links.SetWriteStorage(storage)
@@ -44,89 +29,26 @@ func Open(ctx context.Context, storage storage.Storage, schema string) (*DB, err
 	db := &DB{
 		storage: storage,
 		links:   links,
-		types:   types,
 	}
 
-	nb := db.Prototype(RootTypeName).NewBuilder()
-	mb, err := nb.BeginMap(1)
+	rootNode, err := BuildRootNode(ctx, db, schema)
 	if err != nil {
 		return nil, err
 	}
-	na, err := mb.AssembleEntry(RootSchemaFieldName)
+	rootLink, err := db.Store(ctx, rootNode)
 	if err != nil {
 		return nil, err
 	}
-	err = na.AssignString(schema)
-	if err != nil {
-		return nil, err
-	}
-	lnk, err := db.Store(ctx, nb.Build())
-	if err != nil {
-		return nil, err
-	}
-	err = db.SetRootLink(ctx, lnk)
+	err = db.SetRootLink(ctx, rootLink)
 	if err != nil {
 		return nil, err
 	}
 	return db, nil
 }
 
-func Load(ctx context.Context, storage storage.Storage) (string, *DB, error) {
-	links := cidlink.DefaultLinkSystem()
-	links.SetReadStorage(storage)
-	links.SetWriteStorage(storage)
-
-	db := &DB{
-		storage: storage,
-		links:   links,
-	}
-
-	rootLink, err := db.RootLink(ctx)
-	if err != nil {
-		return "", nil, err
-	}
-	rootNode, err := db.Load(ctx, rootLink, basicnode.Prototype.Any)
-	if err != nil {
-		return "", nil, err
-	}
-	schemaNode, err := rootNode.LookupByString(RootSchemaFieldName)
-	if err != nil {
-		return "", nil, err
-	}
-	schema, err := schemaNode.AsString()
-	if err != nil {
-		return "", nil, err
-	}
-	as, err := gqlparser.LoadSchema(&ast.Source{Input: schema})
-	if err != nil {
-		return "", nil, err
-	}
-	types, errs := SpawnTypeSystem(as)
-	if len(errs) > 0 {
-		return "", nil, errors.Join(errs...)
-	}
-	db.types = types
-	return schema, db, nil
-}
-
 // LinkSystem returns the linking.LinkSystem used to store and load data.
 func (db *DB) LinkSystem() *linking.LinkSystem {
 	return &db.links
-}
-
-// TypeSystem returns the schema.TypeSystem containing all defined types.
-func (db *DB) TypeSystem() *schema.TypeSystem {
-	return db.types
-}
-
-// Type returns the type with a matching name.
-func (db *DB) Type(name string) schema.Type {
-	return db.types.TypeByName(name)
-}
-
-// Prototype returns the NodePrototype for the type with a matching name.
-func (db *DB) Prototype(name string) datamodel.NodePrototype {
-	return bindnode.Prototype(nil, db.Type(name))
 }
 
 // RootNode returns the root node from the db.
@@ -135,7 +57,7 @@ func (db *DB) RootNode(ctx context.Context) (datamodel.Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	return db.Load(ctx, rootLink, db.Prototype(RootTypeName))
+	return db.Load(ctx, rootLink, basicnode.Prototype.Map)
 }
 
 // RootLink returns the current root link from the db.
@@ -190,7 +112,7 @@ func (db *DB) Transaction(ctx context.Context, readOnly bool) (*Transaction, err
 	if err != nil {
 		return nil, err
 	}
-	rootNode, err := db.Load(ctx, rootLink, db.Prototype(RootTypeName))
+	rootNode, err := db.Load(ctx, rootLink, basicnode.Prototype.Any)
 	if err != nil {
 		return nil, err
 	}

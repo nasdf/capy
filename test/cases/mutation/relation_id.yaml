@@ -21,7 +21,7 @@ operations:
       }
   - query: |
         mutation {
-          createNode(data: {value: 0, child: {_id: "{{index .Node.Keys 0}}"}}) {
+          createNode(data: {value: 0, child: {_id: "{{index .Node 0}}"}}) {
             value
             child {
               value

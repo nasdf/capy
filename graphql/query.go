@@ -3,14 +3,10 @@ package graphql
 import (
 	"context"
 	"fmt"
-	"slices"
 	"strings"
-
-	"github.com/nasdf/capy/core"
 
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/ipld/go-ipld-prime/datamodel"
-	"github.com/ipld/go-ipld-prime/schema"
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 )
@@ -48,14 +44,14 @@ func (e *executionContext) executeQuery(ctx context.Context, set ast.SelectionSe
 		case strings.HasPrefix(field.Name, findOperationPrefix):
 			collection := strings.TrimPrefix(field.Name, findOperationPrefix)
 			args := field.ArgumentMap(e.params.Variables)
-			err = e.queryDocument(ctx, field, collection, args["id"].(string), va)
+			err = e.findQuery(ctx, field, collection, args["id"].(string), va)
 			if err != nil {
 				return err
 			}
 
 		case strings.HasPrefix(field.Name, listOperationPrefix):
 			collection := strings.TrimPrefix(field.Name, listOperationPrefix)
-			err = e.queryCollection(ctx, field, collection, va)
+			err = e.listQuery(ctx, field, collection, va)
 			if err != nil {
 				return err
 			}
@@ -67,34 +63,16 @@ func (e *executionContext) executeQuery(ctx context.Context, set ast.SelectionSe
 	return ma.Finish()
 }
 
-func (e *executionContext) queryDocuments(ctx context.Context, field graphql.CollectedField, collection string, ids []string, na datamodel.NodeAssembler) error {
-	la, err := na.BeginList(int64(len(ids)))
-	if err != nil {
-		return err
-	}
-	err = e.tx.ForEachDocument(ctx, collection, func(id string, doc datamodel.Node) error {
-		if !slices.Contains(ids, id) {
-			return nil
-		}
-		ctx = context.WithValue(ctx, idContextKey, id)
-		return e.queryNode(ctx, doc.(schema.TypedNode), field, la.AssembleValue())
-	})
-	if err != nil {
-		return err
-	}
-	return la.Finish()
-}
-
-func (e *executionContext) queryDocument(ctx context.Context, field graphql.CollectedField, collection string, id string, na datamodel.NodeAssembler) error {
+func (e *executionContext) findQuery(ctx context.Context, field graphql.CollectedField, collection string, id string, na datamodel.NodeAssembler) error {
 	doc, err := e.tx.ReadDocument(ctx, collection, id)
 	if err != nil {
 		return err
 	}
 	ctx = context.WithValue(ctx, idContextKey, id)
-	return e.queryNode(ctx, doc.(schema.TypedNode), field, na)
+	return e.queryDocument(ctx, collection, doc, field, na)
 }
 
-func (e *executionContext) queryCollection(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) error {
+func (e *executionContext) listQuery(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) error {
 	la, err := na.BeginList(0)
 	if err != nil {
 		return err
@@ -102,11 +80,11 @@ func (e *executionContext) queryCollection(ctx context.Context, field graphql.Co
 	args := field.ArgumentMap(e.params.Variables)
 	err = e.tx.ForEachDocument(ctx, collection, func(id string, doc datamodel.Node) error {
 		ctx = context.WithValue(ctx, idContextKey, id)
-		match, err := e.filterDocument(ctx, doc.(schema.TypedNode), args["filter"])
+		match, err := e.filterDocument(ctx, collection, doc, args["filter"])
 		if err != nil || !match {
 			return err
 		}
-		return e.queryNode(ctx, doc.(schema.TypedNode), field, la.AssembleValue())
+		return e.queryDocument(ctx, collection, doc, field, la.AssembleValue())
 	})
 	if err != nil {
 		return err
@@ -114,61 +92,18 @@ func (e *executionContext) queryCollection(ctx context.Context, field graphql.Co
 	return la.Finish()
 }
 
-func (e *executionContext) queryNode(ctx context.Context, n schema.TypedNode, field graphql.CollectedField, na datamodel.NodeAssembler) error {
-	if len(field.SelectionSet) == 0 {
-		return na.AssignNode(n)
-	}
-	collection, ok := core.RelationName(n.Type())
-	if ok {
-		id, err := n.AsString()
-		if err != nil {
-			return err
-		}
-		return e.queryDocument(ctx, field, collection, id, na)
-	}
-	switch n.Kind() {
-	case datamodel.Kind_List:
-		return e.queryList(ctx, n, field, na)
-	case datamodel.Kind_Map:
-		return e.queryMap(ctx, n, field, na)
-	case datamodel.Kind_Null:
-		return na.AssignNull()
-	default:
-		return gqlerror.ErrorPosf(field.Position, "cannot traverse node of type %s", n.Kind().String())
-	}
-}
-
-func (e *executionContext) queryList(ctx context.Context, n schema.TypedNode, field graphql.CollectedField, na datamodel.NodeAssembler) error {
-	la, err := na.BeginList(n.Length())
-	if err != nil {
-		return err
-	}
-	iter := n.ListIterator()
-	for !iter.Done() {
-		_, obj, err := iter.Next()
-		if err != nil {
-			return err
-		}
-		err = e.queryNode(ctx, obj.(schema.TypedNode), field, la.AssembleValue())
-		if err != nil {
-			return err
-		}
-	}
-	return la.Finish()
-}
-
-func (e *executionContext) queryMap(ctx context.Context, n schema.TypedNode, field graphql.CollectedField, na datamodel.NodeAssembler) error {
-	fields := e.collectFields(field.SelectionSet, n.Type().Name())
+func (e *executionContext) queryDocument(ctx context.Context, collection string, n datamodel.Node, field graphql.CollectedField, na datamodel.NodeAssembler) error {
+	fields := e.collectFields(field.SelectionSet, collection)
 	ma, err := na.BeginMap(int64(len(fields)))
 	if err != nil {
 		return err
 	}
-	for _, field := range fields {
-		va, err := ma.AssembleEntry(field.Alias)
+	for _, f := range fields {
+		va, err := ma.AssembleEntry(f.Alias)
 		if err != nil {
 			return err
 		}
-		switch field.Name {
+		switch f.Name {
 		case "_link":
 			err = va.AssignString(ctx.Value(linkContextKey).(string))
 			if err != nil {
@@ -176,7 +111,7 @@ func (e *executionContext) queryMap(ctx context.Context, n schema.TypedNode, fie
 			}
 
 		case "__typename":
-			err = va.AssignString(n.Type().Name())
+			err = va.AssignString(collection)
 			if err != nil {
 				return err
 			}
@@ -188,14 +123,22 @@ func (e *executionContext) queryMap(ctx context.Context, n schema.TypedNode, fie
 			}
 
 		default:
-			obj, err := n.LookupByString(field.Name)
-			if err != nil {
+			def, ok := e.schema.Types[collection]
+			if !ok {
+				return fmt.Errorf("invalid document type %s", collection)
+			}
+			field := def.Fields.ForName(f.Name)
+			if field == nil {
+				return fmt.Errorf("invalid document field %s", f.Name)
+			}
+			fn, err := n.LookupByString(field.Name)
+			if _, ok := err.(datamodel.ErrNotExists); !ok && err != nil {
 				return err
 			}
-			if obj.IsAbsent() || obj.IsNull() {
+			if fn == nil || fn.IsNull() || fn.IsAbsent() {
 				err = va.AssignNull()
 			} else {
-				err = e.queryNode(ctx, obj.(schema.TypedNode), field, va)
+				err = e.queryNode(ctx, field.Type, fn, f, va)
 			}
 			if err != nil {
 				return err
@@ -203,4 +146,49 @@ func (e *executionContext) queryMap(ctx context.Context, n schema.TypedNode, fie
 		}
 	}
 	return ma.Finish()
+}
+
+func (e *executionContext) queryNode(ctx context.Context, typ *ast.Type, n datamodel.Node, field graphql.CollectedField, na datamodel.NodeAssembler) error {
+	if len(field.SelectionSet) == 0 {
+		return na.AssignNode(n)
+	}
+	if typ.Elem != nil {
+		return e.queryList(ctx, typ, n, field, na)
+	}
+	def := e.schema.Types[typ.NamedType]
+	if def.Kind == ast.Object {
+		return e.queryRelation(ctx, typ, n, field, na)
+	}
+	return gqlerror.ErrorPosf(field.Position, "cannot traverse node of type %s", n.Kind().String())
+}
+
+func (e *executionContext) queryRelation(ctx context.Context, typ *ast.Type, n datamodel.Node, field graphql.CollectedField, na datamodel.NodeAssembler) error {
+	id, err := n.AsString()
+	if err != nil {
+		return err
+	}
+	doc, err := e.tx.ReadDocument(ctx, typ.NamedType, id)
+	if err != nil {
+		return err
+	}
+	return e.queryDocument(ctx, typ.NamedType, doc, field, na)
+}
+
+func (e *executionContext) queryList(ctx context.Context, typ *ast.Type, n datamodel.Node, field graphql.CollectedField, na datamodel.NodeAssembler) error {
+	la, err := na.BeginList(n.Length())
+	if err != nil {
+		return err
+	}
+	iter := n.ListIterator()
+	for !iter.Done() {
+		_, obj, err := iter.Next()
+		if err != nil {
+			return err
+		}
+		err = e.queryNode(ctx, typ.Elem, obj, field, la.AssembleValue())
+		if err != nil {
+			return err
+		}
+	}
+	return la.Finish()
 }

@@ -20,11 +20,12 @@ type Transaction struct {
 
 // ForEachDocument calls the given callback for each document in the given collection.
 func (tx *Transaction) ForEachDocument(ctx context.Context, collection string, fn func(id string, doc datamodel.Node) error) error {
-	collectionNode, err := tx.rootNode.LookupByString(collection)
+	documentsPath := DocumentsPath(collection)
+	documentsNode, err := tx.GetNode(ctx, documentsPath, tx.rootNode)
 	if err != nil {
 		return err
 	}
-	iter := collectionNode.MapIterator()
+	iter := documentsNode.MapIterator()
 	for !iter.Done() {
 		k, v, err := iter.Next()
 		if err != nil {
@@ -38,7 +39,7 @@ func (tx *Transaction) ForEachDocument(ctx context.Context, collection string, f
 		if err != nil {
 			return err
 		}
-		doc, err := tx.Load(ctx, lnk, Prototype(v))
+		doc, err := tx.Load(ctx, lnk, basicnode.Prototype.Map)
 		if err != nil {
 			return err
 		}
@@ -52,19 +53,8 @@ func (tx *Transaction) ForEachDocument(ctx context.Context, collection string, f
 
 // ReadDocument returns the document in the given collection with the given unique id.
 func (tx *Transaction) ReadDocument(ctx context.Context, collection, id string) (datamodel.Node, error) {
-	collectionNode, err := tx.rootNode.LookupByString(collection)
-	if err != nil {
-		return nil, err
-	}
-	linkNode, err := collectionNode.LookupByString(id)
-	if err != nil {
-		return nil, err
-	}
-	lnk, err := linkNode.AsLink()
-	if err != nil {
-		return nil, err
-	}
-	return tx.Load(ctx, lnk, Prototype(linkNode))
+	rootPath := DocumentPath(collection, id)
+	return tx.GetNode(ctx, rootPath, tx.rootNode)
 }
 
 // CreateDocument creates a new document in the collection with the given name and returns its unique id.
@@ -80,7 +70,7 @@ func (tx *Transaction) CreateDocument(ctx context.Context, collection string, no
 	if err != nil {
 		return "", err
 	}
-	rootPath := datamodel.ParsePath(collection).AppendSegmentString(id.String())
+	rootPath := datamodel.ParsePath(RootCollectionsFieldName + "/" + collection + "/" + CollectionDocumentsFieldName + "/" + id.String())
 	rootNode, err := tx.SetNode(ctx, rootPath, tx.rootNode, basicnode.NewLink(lnk))
 	if err != nil {
 		return "", err
@@ -98,7 +88,7 @@ func (tx *Transaction) UpdateDocument(ctx context.Context, collection, id string
 	if err != nil {
 		return err
 	}
-	rootPath := datamodel.ParsePath(collection).AppendSegmentString(id)
+	rootPath := DocumentPath(collection, id)
 	rootNode, err := tx.SetNode(ctx, rootPath, tx.rootNode, basicnode.NewLink(lnk))
 	if err != nil {
 		return err
@@ -112,7 +102,7 @@ func (tx *Transaction) DeleteDocument(ctx context.Context, collection, id string
 	if tx.readOnly {
 		return ErrReadOnlyTx
 	}
-	rootPath := datamodel.ParsePath(collection).AppendSegmentString(id)
+	rootPath := DocumentPath(collection, id)
 	rootNode, err := tx.SetNode(ctx, rootPath, tx.rootNode, nil)
 	if err != nil {
 		return err

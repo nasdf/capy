@@ -20,7 +20,7 @@ operations:
       }
   - query: |
         query {
-          findUser(id: "{{index .User.Keys 0}}") {
+          findUser(id: "{{index .User 0}}") {
             name
           }
         }

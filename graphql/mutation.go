@@ -2,11 +2,11 @@ package graphql
 
 import (
 	"context"
+	"slices"
 	"strings"
 
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/ipld/go-ipld-prime/datamodel"
-	"github.com/ipld/go-ipld-prime/schema"
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 )
@@ -53,44 +53,61 @@ func (e *executionContext) executeMutation(ctx context.Context, set ast.Selectio
 
 func (e *executionContext) createMutation(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) error {
 	args := field.ArgumentMap(e.params.Variables)
-	id, err := e.createDocument(ctx, collection, args["data"])
+	data, _ := args["data"].(map[string]any)
+	id, err := e.createDocument(ctx, collection, data)
 	if err != nil {
 		return err
 	}
-	return e.queryDocument(ctx, field, collection, id, na)
+	return e.findQuery(ctx, field, collection, id, na)
 }
 
 func (e *executionContext) updateMutation(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) error {
-	var ids []string
 	args := field.ArgumentMap(e.params.Variables)
+	filter, _ := args["filter"].(map[string]any)
+	patch, _ := args["patch"].(map[string]any)
+
+	var ids []string
 	err := e.tx.ForEachDocument(ctx, collection, func(id string, doc datamodel.Node) error {
 		ctx = context.WithValue(ctx, idContextKey, id)
-		match, err := e.filterDocument(ctx, doc.(schema.TypedNode), args["filter"])
+		match, err := e.filterDocument(ctx, collection, doc, filter)
 		if err != nil || !match {
 			return err
 		}
 		ids = append(ids, id)
-		return e.patchDocument(ctx, collection, id, doc.(schema.TypedNode), args["patch"])
+		return e.patchDocument(ctx, collection, id, doc, patch)
 	})
 	if err != nil {
 		return err
 	}
-	return e.queryDocuments(ctx, field, collection, ids, na)
-}
-
-func (e *executionContext) deleteMutation(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) error {
 	la, err := na.BeginList(0)
 	if err != nil {
 		return err
 	}
+	err = e.tx.ForEachDocument(ctx, collection, func(id string, doc datamodel.Node) error {
+		if !slices.Contains(ids, id) {
+			return nil
+		}
+		ctx = context.WithValue(ctx, idContextKey, id)
+		return e.queryDocument(ctx, collection, doc, field, la.AssembleValue())
+	})
+	return la.Finish()
+}
+
+func (e *executionContext) deleteMutation(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) error {
 	args := field.ArgumentMap(e.params.Variables)
+	filter, _ := args["filter"].(map[string]any)
+
+	la, err := na.BeginList(0)
+	if err != nil {
+		return err
+	}
 	err = e.tx.ForEachDocument(ctx, collection, func(id string, doc datamodel.Node) error {
 		ctx = context.WithValue(ctx, idContextKey, id)
-		match, err := e.filterDocument(ctx, doc.(schema.TypedNode), args["filter"])
+		match, err := e.filterDocument(ctx, collection, doc, filter)
 		if err != nil || !match {
 			return err
 		}
-		err = e.queryNode(ctx, doc.(schema.TypedNode), field, la.AssembleValue())
+		err = e.queryDocument(ctx, collection, doc, field, la.AssembleValue())
 		if err != nil {
 			return err
 		}

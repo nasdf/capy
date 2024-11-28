@@ -31,21 +31,6 @@ func Open(ctx context.Context, storage storage.Storage, schema string) (*Capy, e
 	}, nil
 }
 
-func Load(ctx context.Context, storage storage.Storage) (*Capy, error) {
-	schema, db, err := core.Load(ctx, storage)
-	if err != nil {
-		return nil, err
-	}
-	s, err := graphql.GenerateSchema(schema)
-	if err != nil {
-		return nil, err
-	}
-	return &Capy{
-		DB:     db,
-		Schema: s,
-	}, nil
-}
-
 func (c *Capy) Execute(ctx context.Context, params graphql.QueryParams) (datamodel.Node, error) {
 	return graphql.Execute(ctx, c.DB, c.Schema, params)
 }

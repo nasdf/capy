@@ -10,11 +10,11 @@ import (
 	"text/template"
 
 	"github.com/nasdf/capy"
+	"github.com/nasdf/capy/core"
 	"github.com/nasdf/capy/graphql"
 	"github.com/nasdf/capy/storage"
 
 	"github.com/ipld/go-ipld-prime/codec/json"
-	"github.com/ipld/go-ipld-prime/node/bindnode"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
@@ -37,13 +37,10 @@ func (tc TestCase) Run(t *testing.T) {
 	require.NoError(t, err, "failed to create db")
 
 	for _, op := range tc.Operations {
-		rootNode, err := c.DB.RootNode(ctx)
-		require.NoError(t, err, "failed to load root node")
+		docs, err := core.Dump(ctx, c.DB)
+		require.NoError(t, err, "failed to load documents")
 
-		rootValue := bindnode.Unwrap(rootNode)
-		require.NotNil(t, rootValue)
-
-		query, err := op.QueryTemplate(ctx, rootValue)
+		query, err := op.QueryTemplate(ctx, docs)
 		require.NoError(t, err, "failed to execute query template")
 
 		node, err := c.Execute(ctx, graphql.QueryParams{Query: query})
@@ -53,7 +50,7 @@ func (tc TestCase) Run(t *testing.T) {
 		err = json.Encode(node, &actual)
 		require.NoError(t, err, "failed to encode results")
 
-		expected, err := op.ResponseTemplate(ctx, rootValue)
+		expected, err := op.ResponseTemplate(ctx, docs)
 		require.NoError(t, err, "failed to execute response template")
 
 		assert.JSONEq(t, expected, actual.String())
@@ -74,7 +71,7 @@ func (o Operation) QueryTemplate(ctx context.Context, rootValue any) (string, er
 	}
 	var data bytes.Buffer
 	if err := tpl.Execute(&data, rootValue); err != nil {
-		return "", nil
+		return "", err
 	}
 	return data.String(), nil
 }
@@ -86,7 +83,7 @@ func (o Operation) ResponseTemplate(ctx context.Context, rootValue any) (string,
 	}
 	var data bytes.Buffer
 	if err := tpl.Execute(&data, rootValue); err != nil {
-		return "", nil
+		return "", err
 	}
 	return data.String(), nil
 }

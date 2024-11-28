@@ -6,10 +6,8 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/nasdf/capy/core"
-
 	"github.com/ipld/go-ipld-prime/datamodel"
-	"github.com/ipld/go-ipld-prime/schema"
+	"github.com/vektah/gqlparser/v2/ast"
 )
 
 const (
@@ -29,33 +27,41 @@ const (
 	noneFilter           = "none"
 )
 
-func (e *executionContext) filterDocument(ctx context.Context, n schema.TypedNode, value any) (bool, error) {
+func (e *executionContext) filterDocument(ctx context.Context, collection string, n datamodel.Node, value any) (bool, error) {
 	if value == nil {
 		return true, nil
 	}
 	for key, val := range value.(map[string]any) {
 		switch key {
 		case andFilter:
-			match, err := e.filterAnd(ctx, n, val)
+			match, err := e.filterAnd(ctx, collection, n, val)
 			if err != nil || !match {
 				return false, err
 			}
 		case orFilter:
-			match, err := e.filterOr(ctx, n, val)
+			match, err := e.filterOr(ctx, collection, n, val)
 			if err != nil || !match {
 				return false, err
 			}
 		case notFilter:
-			match, err := e.filterDocument(ctx, n, val.(map[string]any))
+			match, err := e.filterDocument(ctx, collection, n, val.(map[string]any))
 			if err != nil || match {
 				return false, err
 			}
 		default:
-			field, err := n.LookupByString(key)
+			def, ok := e.schema.Types[collection]
+			if !ok {
+				return false, fmt.Errorf("invalid document type %s", collection)
+			}
+			field := def.Fields.ForName(key)
+			if field == nil {
+				return false, fmt.Errorf("invalid document field %s", key)
+			}
+			fn, err := n.LookupByString(key)
 			if err != nil {
 				return false, err
 			}
-			match, err := e.filterField(ctx, field.(schema.TypedNode), val)
+			match, err := e.filterNode(ctx, field.Type, fn, val)
 			if err != nil || !match {
 				return false, err
 			}
@@ -64,17 +70,13 @@ func (e *executionContext) filterDocument(ctx context.Context, n schema.TypedNod
 	return true, nil
 }
 
-func (e *executionContext) filterField(ctx context.Context, n schema.TypedNode, value any) (bool, error) {
+func (e *executionContext) filterNode(ctx context.Context, typ *ast.Type, n datamodel.Node, value any) (bool, error) {
 	if value == nil {
 		return true, nil
 	}
-	collection, ok := core.RelationName(n.Type())
-	if ok {
-		id, err := n.AsString()
-		if err != nil {
-			return false, err
-		}
-		return e.filterRelation(ctx, collection, id, value.(map[string]any))
+	def := e.schema.Types[typ.NamedType]
+	if def.Kind == ast.Object {
+		return e.filterRelation(ctx, typ, n, value.(map[string]any))
 	}
 	for key, val := range value.(map[string]any) {
 		switch key {
@@ -119,17 +121,17 @@ func (e *executionContext) filterField(ctx context.Context, n schema.TypedNode, 
 				return false, err
 			}
 		case allFilter:
-			match, err := e.filterAll(ctx, n, val)
+			match, err := e.filterAll(ctx, typ, n, val)
 			if err != nil || !match {
 				return false, err
 			}
 		case anyFilter:
-			match, err := e.filterAny(ctx, n, val)
+			match, err := e.filterAny(ctx, typ, n, val)
 			if err != nil || !match {
 				return false, err
 			}
 		case noneFilter:
-			match, err := e.filterAny(ctx, n, val)
+			match, err := e.filterAny(ctx, typ, n, val)
 			if err != nil || match {
 				return false, err
 			}
@@ -140,23 +142,27 @@ func (e *executionContext) filterField(ctx context.Context, n schema.TypedNode, 
 	return true, nil
 }
 
-func (e *executionContext) filterRelation(ctx context.Context, collection, id string, value any) (bool, error) {
+func (e *executionContext) filterRelation(ctx context.Context, typ *ast.Type, n datamodel.Node, value any) (bool, error) {
 	if value == nil {
 		return true, nil
 	}
-	doc, err := e.tx.ReadDocument(ctx, collection, id)
+	id, err := n.AsString()
 	if err != nil {
 		return false, err
 	}
-	return e.filterDocument(ctx, doc.(schema.TypedNode), value)
+	doc, err := e.tx.ReadDocument(ctx, typ.NamedType, id)
+	if err != nil {
+		return false, err
+	}
+	return e.filterDocument(ctx, typ.NamedType, doc, value)
 }
 
-func (e *executionContext) filterAnd(ctx context.Context, n schema.TypedNode, value any) (bool, error) {
+func (e *executionContext) filterAnd(ctx context.Context, collection string, n datamodel.Node, value any) (bool, error) {
 	if value == nil {
 		return true, nil
 	}
 	for _, v := range value.([]any) {
-		match, err := e.filterDocument(ctx, n, v.(map[string]any))
+		match, err := e.filterDocument(ctx, collection, n, v.(map[string]any))
 		if err != nil || !match {
 			return false, err
 		}
@@ -164,12 +170,12 @@ func (e *executionContext) filterAnd(ctx context.Context, n schema.TypedNode, va
 	return true, nil
 }
 
-func (e *executionContext) filterOr(ctx context.Context, n schema.TypedNode, value any) (bool, error) {
+func (e *executionContext) filterOr(ctx context.Context, collection string, n datamodel.Node, value any) (bool, error) {
 	if value == nil {
 		return true, nil
 	}
 	for _, v := range value.([]any) {
-		match, err := e.filterDocument(ctx, n, v.(map[string]any))
+		match, err := e.filterDocument(ctx, collection, n, v.(map[string]any))
 		if err != nil || match {
 			return match, err
 		}
@@ -177,7 +183,7 @@ func (e *executionContext) filterOr(ctx context.Context, n schema.TypedNode, val
 	return true, nil
 }
 
-func (e *executionContext) filterAll(ctx context.Context, n schema.TypedNode, value any) (bool, error) {
+func (e *executionContext) filterAll(ctx context.Context, typ *ast.Type, n datamodel.Node, value any) (bool, error) {
 	if value == nil {
 		return true, nil
 	}
@@ -187,7 +193,7 @@ func (e *executionContext) filterAll(ctx context.Context, n schema.TypedNode, va
 		if err != nil {
 			return false, err
 		}
-		match, err := e.filterField(ctx, v.(schema.TypedNode), value)
+		match, err := e.filterNode(ctx, typ.Elem, v, value)
 		if err != nil || !match {
 			return false, err
 		}
@@ -195,7 +201,7 @@ func (e *executionContext) filterAll(ctx context.Context, n schema.TypedNode, va
 	return true, nil
 }
 
-func (e *executionContext) filterAny(ctx context.Context, n schema.TypedNode, value any) (bool, error) {
+func (e *executionContext) filterAny(ctx context.Context, typ *ast.Type, n datamodel.Node, value any) (bool, error) {
 	if value == nil {
 		return true, nil
 	}
@@ -205,7 +211,7 @@ func (e *executionContext) filterAny(ctx context.Context, n schema.TypedNode, va
 		if err != nil {
 			return false, err
 		}
-		match, err := e.filterField(ctx, v.(schema.TypedNode), value)
+		match, err := e.filterNode(ctx, typ.Elem, v, value)
 		if err != nil || match {
 			return match, err
 		}
@@ -213,7 +219,7 @@ func (e *executionContext) filterAny(ctx context.Context, n schema.TypedNode, va
 	return false, nil
 }
 
-func filterIn(n schema.TypedNode, value any) (bool, error) {
+func filterIn(n datamodel.Node, value any) (bool, error) {
 	switch n.Kind() {
 	case datamodel.Kind_Int:
 		v, err := n.AsInt()
@@ -238,7 +244,7 @@ func filterIn(n schema.TypedNode, value any) (bool, error) {
 	}
 }
 
-func filterCompare(n schema.TypedNode, value any) (int, error) {
+func filterCompare(n datamodel.Node, value any) (int, error) {
 	switch n.Kind() {
 	case datamodel.Kind_Int:
 		v, err := n.AsInt()
@@ -263,7 +269,7 @@ func filterCompare(n schema.TypedNode, value any) (int, error) {
 	}
 }
 
-func filterEqual(n schema.TypedNode, value any) (bool, error) {
+func filterEqual(n datamodel.Node, value any) (bool, error) {
 	switch n.Kind() {
 	case datamodel.Kind_Bool:
 		v, err := n.AsBool()
