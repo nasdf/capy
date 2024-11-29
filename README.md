@@ -1,12 +1,13 @@
 # Capy
 
-Capy is an embeddable graph database for building applications with verifiable, content addressable, linked data.
+A graph database for distributed applications.
 
 ## Features
 
-- Define IPLD types using GraphQL
-- Mutate and query linked data using GraphQL
-- Export data to IPFS or Filecoin for permanent storage
+- Define schemas and queries in GraphQL
+- Branch and merge using property based CRDTs
+- Change history tracking using a merkle DAG
+- Time traveling queries using the commit graph
 
 ## Getting started
 
