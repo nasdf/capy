@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/ipfs/go-cid"
 	"github.com/nasdf/capy/storage"
 
 	"github.com/ipld/go-ipld-prime/datamodel"
@@ -12,11 +13,20 @@ import (
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
 	"github.com/ipld/go-ipld-prime/traversal"
+
+	// codecs need to be initialized and registered
+	_ "github.com/ipld/go-ipld-prime/codec/dagcbor"
+	_ "github.com/ipld/go-ipld-prime/codec/dagjson"
 )
 
-// RootLinkKey is the name of the key for the root link.
-const RootLinkKey = "root"
+var defaultLinkPrototype = cidlink.LinkPrototype{Prefix: cid.Prefix{
+	Version:  1,    // Usually '1'.
+	Codec:    0x71, // dag-cbor -- See the multicodecs table: https://github.com/multiformats/multicodec/
+	MhType:   0x13, // sha2-512 -- See the multicodecs table: https://github.com/multiformats/multicodec/
+	MhLength: 64,   // sha2-512 hash has a 64-byte sum.
+}}
 
+// DB is a content addressable database
 type DB struct {
 	store    storage.Storage
 	links    linking.LinkSystem
@@ -24,6 +34,7 @@ type DB struct {
 	rootLock sync.RWMutex
 }
 
+// Open creates a new DB instance using the given store and schema.
 func Open(ctx context.Context, store storage.Storage, schema string) (*DB, error) {
 	links := cidlink.DefaultLinkSystem()
 	links.SetReadStorage(store)
@@ -67,7 +78,15 @@ func (db *DB) Store(ctx context.Context, node datamodel.Node) (datamodel.Link, e
 
 // Traversal returns a traversal.Progress configured with the default values for this db.
 func (db *DB) Traversal(ctx context.Context) traversal.Progress {
-	return traversal.Progress{Cfg: defaultTraversalConfig(ctx, db.links)}
+	chooser := func(l datamodel.Link, lc linking.LinkContext) (datamodel.NodePrototype, error) {
+		return basicnode.Prototype.Any, nil
+	}
+	config := &traversal.Config{
+		Ctx:                            ctx,
+		LinkSystem:                     db.links,
+		LinkTargetNodePrototypeChooser: chooser,
+	}
+	return traversal.Progress{Cfg: config}
 }
 
 // GetNode returns the node at the given path starting from the given node.
@@ -116,7 +135,7 @@ func (db *DB) Commit(ctx context.Context, rootLink datamodel.Link, rootNode data
 	if db.rootLink != rootLink {
 		return fmt.Errorf("transaction conflict")
 	}
-	parentsNode, err := BuildRootParentsNode(db, rootLink)
+	parentsNode, err := BuildRootParentsNode(rootLink)
 	if err != nil {
 		return err
 	}

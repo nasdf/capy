@@ -11,6 +11,7 @@ import (
 
 var ErrReadOnlyTx = errors.New("transaction is read only")
 
+// Transaction is used to read and write documents.
 type Transaction struct {
 	db       *DB
 	readOnly bool
