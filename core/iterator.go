@@ -9,8 +9,21 @@ import (
 
 // DocumentIterator iterates over all documents in a collection.
 type DocumentIterator struct {
-	db *DB
-	it datamodel.MapIterator
+	store *Store
+	it    datamodel.MapIterator
+}
+
+// DocumentIterator returns a new iterator that can be used to iterate through all documents in a collection.
+func (t *Transaction) DocumentIterator(ctx context.Context, collection string) (*DocumentIterator, error) {
+	documentsPath := DocumentsPath(collection)
+	documentsNode, err := t.store.GetNode(ctx, documentsPath, t.rootNode)
+	if err != nil {
+		return nil, err
+	}
+	return &DocumentIterator{
+		store: t.store,
+		it:    documentsNode.MapIterator(),
+	}, nil
 }
 
 // Done returns true if the iterator has no items left.
@@ -32,29 +45,38 @@ func (i *DocumentIterator) Next(ctx context.Context) (string, datamodel.Node, er
 	if err != nil {
 		return "", nil, err
 	}
-	doc, err := i.db.Load(ctx, lnk, basicnode.Prototype.Map)
+	doc, err := i.store.Load(ctx, lnk, basicnode.Prototype.Map)
 	if err != nil {
 		return "", nil, err
 	}
 	return id, doc, nil
 }
 
-// CommitIterator iterates over all commits in a database.
-type CommitIterator struct {
-	db   *DB
-	next []datamodel.Link
-	seen map[string]struct{}
+// ParentIterator iterates over all parents of a root node.
+type ParentIterator struct {
+	store *Store
+	next  []datamodel.Link
+	seen  map[string]struct{}
+}
+
+// ParentIterator returns a new iterator that can be used to iterate through all parents of a root node.
+func (s *Store) ParentIterator(rootLink datamodel.Link) *ParentIterator {
+	return &ParentIterator{
+		store: s,
+		next:  []datamodel.Link{rootLink},
+		seen:  make(map[string]struct{}),
+	}
 }
 
 // Done returns true if the iterator has no items left.
-func (i *CommitIterator) Done() bool {
+func (i *ParentIterator) Done() bool {
 	return len(i.next) == 0
 }
 
-// Next returns the next commit link and commit node from the iterator.
-func (i *CommitIterator) Next(ctx context.Context) (datamodel.Link, datamodel.Node, error) {
+// Next returns the next parent link and parent node from the iterator.
+func (i *ParentIterator) Next(ctx context.Context) (datamodel.Link, datamodel.Node, error) {
 	rootLink := i.next[0]
-	rootNode, err := i.db.Load(ctx, rootLink, basicnode.Prototype.Map)
+	rootNode, err := i.store.Load(ctx, rootLink, basicnode.Prototype.Map)
 	if err != nil {
 		return nil, nil, err
 	}

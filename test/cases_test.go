@@ -32,17 +32,17 @@ type TestCase struct {
 func (tc TestCase) Run(t *testing.T) {
 	ctx := context.Background()
 
-	c, err := capy.Open(ctx, storage.NewMemory(), tc.Schema)
+	db, err := capy.Open(ctx, storage.NewMemory(), tc.Schema)
 	require.NoError(t, err, "failed to create db")
 
 	for _, op := range tc.Operations {
-		docs, err := c.DB.Dump(ctx)
+		docs, err := db.Dump(ctx)
 		require.NoError(t, err, "failed to load documents")
 
 		query, err := op.QueryTemplate(ctx, docs)
 		require.NoError(t, err, "failed to execute query template")
 
-		node, err := c.Execute(ctx, graphql.QueryParams{Query: query})
+		node, err := db.Execute(ctx, graphql.QueryParams{Query: query})
 		require.NoError(t, err, "failed to execute query")
 
 		var actual bytes.Buffer

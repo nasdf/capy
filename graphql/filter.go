@@ -150,7 +150,7 @@ func (e *executionContext) filterRelation(ctx context.Context, typ *ast.Type, n 
 	if err != nil {
 		return false, err
 	}
-	doc, err := e.tx.ReadDocument(ctx, typ.NamedType, id)
+	doc, err := e.store.ReadDocument(ctx, typ.NamedType, id)
 	if err != nil {
 		return false, err
 	}

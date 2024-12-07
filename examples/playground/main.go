@@ -44,7 +44,7 @@ func main() {
 }
 
 // handler returns an http.handler that can serve GraphQL requests.
-func handler(c *capy.Capy) http.Handler {
+func handler(db *capy.DB) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var params graphql.QueryParams
 		var err error
@@ -66,7 +66,7 @@ func handler(c *capy.Capy) http.Handler {
 			http.Error(w, fmt.Sprintf("failed to parse request: %v", err), http.StatusBadRequest)
 			return
 		}
-		res, err := c.Execute(r.Context(), params)
+		res, err := db.Execute(r.Context(), params)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

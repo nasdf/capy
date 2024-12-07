@@ -1,4 +1,4 @@
-package graphql
+package schema_gen
 
 import (
 	"bytes"
@@ -15,8 +15,8 @@ var schemaTemplateSource string
 //go:embed prelude.graphql
 var preludeSource string
 
-// GenerateSchema creates a GraphQL schema from the given IPLD schema.TypeSystem.
-func GenerateSchema(input string) (*ast.Schema, error) {
+// Execute creates a GraphQL schema from the given IPLD schema.TypeSystem.
+func Execute(input string) (*ast.Schema, error) {
 	inputSource := ast.Source{Input: input}
 	inputSchema, err := gqlparser.LoadSchema(&inputSource)
 	if err != nil {

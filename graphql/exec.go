@@ -33,13 +33,13 @@ type QueryParams struct {
 }
 
 // Execute runs the query and returns a node containing the result of the query operation.
-func Execute(ctx context.Context, db *core.DB, schema *ast.Schema, params QueryParams) (datamodel.Node, error) {
+func Execute(ctx context.Context, store *core.Transaction, schema *ast.Schema, params QueryParams) (datamodel.Node, error) {
 	nb := basicnode.Prototype.Any.NewBuilder()
 	ma, err := nb.BeginMap(2)
 	if err != nil {
 		return nil, err
 	}
-	err = assignResults(ctx, db, schema, params, ma)
+	err = assignResults(ctx, store, schema, params, ma)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +50,7 @@ func Execute(ctx context.Context, db *core.DB, schema *ast.Schema, params QueryP
 	return nb.Build(), nil
 }
 
-func assignResults(ctx context.Context, db *core.DB, schema *ast.Schema, params QueryParams, na datamodel.MapAssembler) error {
+func assignResults(ctx context.Context, store *core.Transaction, schema *ast.Schema, params QueryParams, na datamodel.MapAssembler) error {
 	query, errs := gqlparser.LoadQuery(schema, params.Query)
 	if errs != nil {
 		return assignErrors(errs, na)
@@ -64,12 +64,8 @@ func assignResults(ctx context.Context, db *core.DB, schema *ast.Schema, params 
 	if operation == nil {
 		return assignErrors(gqlerror.List{gqlerror.Errorf("operation is not defined")}, na)
 	}
-	tx, err := db.Transaction(ctx, operation.Operation == ast.Query)
-	if err != nil {
-		return err
-	}
 	exe := executionContext{
-		tx:     tx,
+		store:  store,
 		schema: schema,
 		params: params,
 		query:  query,
@@ -77,10 +73,6 @@ func assignResults(ctx context.Context, db *core.DB, schema *ast.Schema, params 
 	data, err := exe.execute(ctx, operation)
 	if err != nil {
 		return assignErrors(gqlerror.List{gqlerror.WrapIfUnwrapped(err)}, na)
-	}
-	err = tx.Commit(ctx)
-	if err != nil {
-		return err
 	}
 	va, err := na.AssembleEntry("data")
 	if err != nil {
@@ -90,7 +82,7 @@ func assignResults(ctx context.Context, db *core.DB, schema *ast.Schema, params 
 }
 
 type executionContext struct {
-	tx     *core.Transaction
+	store  *core.Transaction
 	schema *ast.Schema
 	query  *ast.QueryDocument
 	params QueryParams

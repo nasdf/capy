@@ -64,7 +64,7 @@ func (e *executionContext) executeQuery(ctx context.Context, set ast.SelectionSe
 }
 
 func (e *executionContext) findQuery(ctx context.Context, field graphql.CollectedField, collection string, id string, na datamodel.NodeAssembler) error {
-	doc, err := e.tx.ReadDocument(ctx, collection, id)
+	doc, err := e.store.ReadDocument(ctx, collection, id)
 	if err != nil {
 		return err
 	}
@@ -77,7 +77,7 @@ func (e *executionContext) listQuery(ctx context.Context, field graphql.Collecte
 	if err != nil {
 		return err
 	}
-	iter, err := e.tx.DocumentIterator(ctx, collection)
+	iter, err := e.store.DocumentIterator(ctx, collection)
 	if err != nil {
 		return err
 	}
@@ -169,7 +169,7 @@ func (e *executionContext) queryRelation(ctx context.Context, typ *ast.Type, n d
 	if err != nil {
 		return err
 	}
-	doc, err := e.tx.ReadDocument(ctx, typ.NamedType, id)
+	doc, err := e.store.ReadDocument(ctx, typ.NamedType, id)
 	if err != nil {
 		return err
 	}
