@@ -3,25 +3,27 @@ package core
 import (
 	"context"
 
+	"github.com/nasdf/capy/link"
+
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
 )
 
 // DocumentIterator iterates over all documents in a collection.
 type DocumentIterator struct {
-	store *Store
+	links *link.Store
 	it    datamodel.MapIterator
 }
 
 // DocumentIterator returns a new iterator that can be used to iterate through all documents in a collection.
 func (t *Transaction) DocumentIterator(ctx context.Context, collection string) (*DocumentIterator, error) {
 	documentsPath := DocumentsPath(collection)
-	documentsNode, err := t.store.GetNode(ctx, documentsPath, t.rootNode)
+	documentsNode, err := t.links.GetNode(ctx, documentsPath, t.rootNode)
 	if err != nil {
 		return nil, err
 	}
 	return &DocumentIterator{
-		store: t.store,
+		links: t.links,
 		it:    documentsNode.MapIterator(),
 	}, nil
 }
@@ -45,7 +47,7 @@ func (i *DocumentIterator) Next(ctx context.Context) (string, datamodel.Node, er
 	if err != nil {
 		return "", nil, err
 	}
-	doc, err := i.store.Load(ctx, lnk, basicnode.Prototype.Map)
+	doc, err := i.links.Load(ctx, lnk, basicnode.Prototype.Map)
 	if err != nil {
 		return "", nil, err
 	}
@@ -54,15 +56,16 @@ func (i *DocumentIterator) Next(ctx context.Context) (string, datamodel.Node, er
 
 // ParentIterator iterates over all parents of a root node.
 type ParentIterator struct {
-	store *Store
+	links *link.Store
 	next  []datamodel.Link
 	seen  map[string]struct{}
+	prev  int
 }
 
 // ParentIterator returns a new iterator that can be used to iterate through all parents of a root node.
 func (s *Store) ParentIterator(rootLink datamodel.Link) *ParentIterator {
 	return &ParentIterator{
-		store: s,
+		links: s.links,
 		next:  []datamodel.Link{rootLink},
 		seen:  make(map[string]struct{}),
 	}
@@ -73,10 +76,20 @@ func (i *ParentIterator) Done() bool {
 	return len(i.next) == 0
 }
 
+// Skip skips the parents of the last node visited by the iterator.
+func (i *ParentIterator) Skip() {
+	i.next = i.next[:i.prev]
+	i.prev = len(i.next)
+}
+
 // Next returns the next parent link and parent node from the iterator.
 func (i *ParentIterator) Next(ctx context.Context) (datamodel.Link, datamodel.Node, error) {
 	rootLink := i.next[0]
-	rootNode, err := i.store.Load(ctx, rootLink, basicnode.Prototype.Map)
+
+	i.next = i.next[1:]
+	i.prev = len(i.next)
+
+	rootNode, err := i.links.Load(ctx, rootLink, basicnode.Prototype.Map)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -101,6 +114,5 @@ func (i *ParentIterator) Next(ctx context.Context) (datamodel.Link, datamodel.No
 		i.seen[lnk.String()] = struct{}{}
 		i.next = append(i.next, lnk)
 	}
-	i.next = i.next[1:]
 	return rootLink, rootNode, nil
 }

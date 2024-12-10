@@ -11,6 +11,7 @@ import (
 
 	"github.com/nasdf/capy"
 	"github.com/nasdf/capy/graphql"
+	"github.com/nasdf/capy/link"
 	"github.com/nasdf/capy/storage"
 
 	"github.com/ipld/go-ipld-prime/codec/json"
@@ -31,12 +32,13 @@ type TestCase struct {
 
 func (tc TestCase) Run(t *testing.T) {
 	ctx := context.Background()
+	links := link.NewStore(storage.NewMemory())
 
-	db, err := capy.Open(ctx, storage.NewMemory(), tc.Schema)
+	db, err := capy.Open(ctx, links, tc.Schema)
 	require.NoError(t, err, "failed to create db")
 
 	for _, op := range tc.Operations {
-		docs, err := db.Dump(ctx)
+		docs, err := db.Store().Dump(ctx)
 		require.NoError(t, err, "failed to load documents")
 
 		query, err := op.QueryTemplate(ctx, docs)

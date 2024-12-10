@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/nasdf/capy/link"
+
 	"github.com/google/uuid"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
@@ -19,24 +21,29 @@ const (
 
 // Transaction is used to create, read, update, and delete documents.
 type Transaction struct {
-	store    *Store
+	links    *link.Store
 	schema   *ast.Schema
 	rootLink datamodel.Link
 	rootNode datamodel.Node
 }
 
-// NewTransaction creates a new transaction using the given store, schema, and root link.
-func NewTransaction(ctx context.Context, store *Store, schema *ast.Schema, rootLink datamodel.Link) (*Transaction, error) {
-	rootNode, err := store.Load(ctx, rootLink, basicnode.Prototype.Map)
+// Transaction creates a new transaction using the given store, schema, and root link.
+func (s *Store) Transaction(ctx context.Context) (*Transaction, error) {
+	rootNode, err := s.links.Load(ctx, s.rootLink, basicnode.Prototype.Map)
 	if err != nil {
 		return nil, err
 	}
 	return &Transaction{
-		store:    store,
-		schema:   schema,
-		rootLink: rootLink,
+		links:    s.links,
+		schema:   s.schema,
+		rootLink: s.rootLink,
 		rootNode: rootNode,
 	}, nil
+}
+
+// Schema returns the schema that describes the collections in this transaction.
+func (t *Transaction) Schema() *ast.Schema {
+	return t.schema
 }
 
 // Commit creates a new root node containing the mutations that were applied during the lifetime of this transaction.
@@ -46,22 +53,22 @@ func (t *Transaction) Commit(ctx context.Context) (datamodel.Link, error) {
 		return nil, err
 	}
 	rootPath := datamodel.ParsePath(RootParentsFieldName)
-	rootNode, err := t.store.SetNode(ctx, rootPath, t.rootNode, parentsNode)
+	rootNode, err := t.links.SetNode(ctx, rootPath, t.rootNode, parentsNode)
 	if err != nil {
 		return nil, err
 	}
-	return t.store.Store(ctx, rootNode)
+	return t.links.Store(ctx, rootNode)
 }
 
 // ReadDocument returns the document in the given collection with the given id.
 func (t *Transaction) ReadDocument(ctx context.Context, collection, id string) (datamodel.Node, error) {
-	return t.store.GetNode(ctx, DocumentPath(collection, id), t.rootNode)
+	return t.links.GetNode(ctx, DocumentPath(collection, id), t.rootNode)
 }
 
 // DeleteDocument deletes the document in the given collection with the given id.
 func (t *Transaction) DeleteDocument(ctx context.Context, collection, id string) error {
 	rootPath := DocumentPath(collection, id)
-	rootNode, err := t.store.SetNode(ctx, rootPath, t.rootNode, nil)
+	rootNode, err := t.links.SetNode(ctx, rootPath, t.rootNode, nil)
 	if err != nil {
 		return err
 	}
@@ -72,29 +79,12 @@ func (t *Transaction) DeleteDocument(ctx context.Context, collection, id string)
 // CreateDocument creates a document in the given collection using the given value and returns its unique id.
 func (t *Transaction) CreateDocument(ctx context.Context, collection string, value map[string]any) (string, error) {
 	nb := basicnode.Prototype.Map.NewBuilder()
-	ma, err := nb.BeginMap(int64(len(value)))
-	if err != nil {
-		return "", err
-	}
+
 	def, ok := t.schema.Types[collection]
 	if !ok {
 		return "", fmt.Errorf("invalid document type %s", collection)
 	}
-	for k, v := range value {
-		field := def.Fields.ForName(k)
-		if field == nil {
-			return "", fmt.Errorf("invalid document field %s", k)
-		}
-		na, err := ma.AssembleEntry(field.Name)
-		if err != nil {
-			return "", err
-		}
-		err = t.assignValue(ctx, field.Type, v, na)
-		if err != nil {
-			return "", err
-		}
-	}
-	err = ma.Finish()
+	err := t.assignObject(ctx, def, value, nb)
 	if err != nil {
 		return "", err
 	}
@@ -102,12 +92,12 @@ func (t *Transaction) CreateDocument(ctx context.Context, collection string, val
 	if err != nil {
 		return "", err
 	}
-	lnk, err := t.store.Store(ctx, nb.Build())
+	lnk, err := t.links.Store(ctx, nb.Build())
 	if err != nil {
 		return "", err
 	}
 	rootPath := DocumentPath(collection, id.String())
-	rootNode, err := t.store.SetNode(ctx, rootPath, t.rootNode, basicnode.NewLink(lnk))
+	rootNode, err := t.links.SetNode(ctx, rootPath, t.rootNode, basicnode.NewLink(lnk))
 	if err != nil {
 		return "", err
 	}
@@ -117,12 +107,9 @@ func (t *Transaction) CreateDocument(ctx context.Context, collection string, val
 
 // PatchDocument patches the document in the given collection with the given id by applying the operations in the given value.
 func (t *Transaction) PatchDocument(ctx context.Context, collection, id string, value map[string]any) error {
-	n, err := t.ReadDocument(ctx, collection, id)
-	if err != nil {
-		return err
-	}
 	nb := basicnode.Prototype.Map.NewBuilder()
-	ma, err := nb.BeginMap(n.Length())
+
+	n, err := t.ReadDocument(ctx, collection, id)
 	if err != nil {
 		return err
 	}
@@ -130,46 +117,43 @@ func (t *Transaction) PatchDocument(ctx context.Context, collection, id string, 
 	if !ok {
 		return fmt.Errorf("invalid document type %s", collection)
 	}
-	for _, field := range def.Fields {
-		if field.Name == "_link" || field.Name == "_id" {
-			continue // ignore system fields
-		}
-		nv, err := n.LookupByString(field.Name)
-		if _, ok := err.(datamodel.ErrNotExists); err != nil && !ok {
-			return err
-		}
-		patch, ok := value[field.Name]
-		if !ok && nv == nil {
-			continue // ignore empty fields
-		}
-		na, err := ma.AssembleEntry(field.Name)
-		if err != nil {
-			return err
-		}
-		if ok {
-			err = t.patchValue(ctx, field.Type, nv, patch, na)
-		} else {
-			err = na.AssignNode(nv)
-		}
-		if err != nil {
-			return err
-		}
-	}
-	err = ma.Finish()
+	err = t.patchObject(ctx, def, n, value, nb)
 	if err != nil {
 		return err
 	}
-	lnk, err := t.store.Store(ctx, nb.Build())
+	lnk, err := t.links.Store(ctx, nb.Build())
 	if err != nil {
 		return err
 	}
 	rootPath := DocumentPath(collection, id)
-	rootNode, err := t.store.SetNode(ctx, rootPath, t.rootNode, basicnode.NewLink(lnk))
+	rootNode, err := t.links.SetNode(ctx, rootPath, t.rootNode, basicnode.NewLink(lnk))
 	if err != nil {
 		return err
 	}
 	t.rootNode = rootNode
 	return nil
+}
+
+func (t *Transaction) assignObject(ctx context.Context, def *ast.Definition, value map[string]any, na datamodel.NodeAssembler) error {
+	ma, err := na.BeginMap(int64(len(value)))
+	if err != nil {
+		return err
+	}
+	for k, v := range value {
+		field := def.Fields.ForName(k)
+		if field == nil {
+			return fmt.Errorf("invalid document field %s", k)
+		}
+		na, err := ma.AssembleEntry(field.Name)
+		if err != nil {
+			return err
+		}
+		err = t.assignValue(ctx, field.Type, v, na)
+		if err != nil {
+			return err
+		}
+	}
+	return ma.Finish()
 }
 
 func (t *Transaction) assignValue(ctx context.Context, typ *ast.Type, value any, na datamodel.NodeAssembler) error {
@@ -221,6 +205,39 @@ func (t *Transaction) assignRelation(ctx context.Context, typ *ast.Type, value m
 		return err
 	}
 	return na.AssignString(id)
+}
+
+func (t *Transaction) patchObject(ctx context.Context, def *ast.Definition, n datamodel.Node, value map[string]any, na datamodel.NodeAssembler) error {
+	ma, err := na.BeginMap(n.Length())
+	if err != nil {
+		return err
+	}
+	for _, field := range def.Fields {
+		if field.Name == "_link" || field.Name == "_id" {
+			continue // ignore system fields
+		}
+		nv, err := n.LookupByString(field.Name)
+		if _, ok := err.(datamodel.ErrNotExists); err != nil && !ok {
+			return err
+		}
+		patch, ok := value[field.Name]
+		if !ok && nv == nil {
+			continue // ignore empty fields
+		}
+		na, err := ma.AssembleEntry(field.Name)
+		if err != nil {
+			return err
+		}
+		if ok {
+			err = t.patchValue(ctx, field.Type, nv, patch, na)
+		} else {
+			err = na.AssignNode(nv)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return ma.Finish()
 }
 
 func (t *Transaction) patchValue(ctx context.Context, typ *ast.Type, n datamodel.Node, value any, na datamodel.NodeAssembler) error {

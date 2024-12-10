@@ -12,6 +12,7 @@ import (
 
 	"github.com/nasdf/capy"
 	"github.com/nasdf/capy/graphql"
+	"github.com/nasdf/capy/link"
 	"github.com/nasdf/capy/storage"
 
 	"github.com/99designs/gqlgen/graphql/playground"
@@ -29,7 +30,8 @@ func main() {
 		address = os.Args[1]
 	}
 
-	db, err := capy.Open(ctx, storage.NewMemory(), schema)
+	links := link.NewStore(storage.NewMemory())
+	db, err := capy.Open(ctx, links, schema)
 	if err != nil {
 		panic(err)
 	}

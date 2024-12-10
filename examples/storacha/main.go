@@ -9,6 +9,7 @@ import (
 
 	"github.com/nasdf/capy"
 	"github.com/nasdf/capy/graphql"
+	"github.com/nasdf/capy/link"
 	"github.com/nasdf/capy/storage"
 
 	"github.com/ipld/go-ipld-prime/codec/json"
@@ -23,7 +24,8 @@ var mutation string
 func main() {
 	ctx := context.Background()
 
-	db, err := capy.Open(ctx, storage.NewMemory(), schema)
+	links := link.NewStore(storage.NewMemory())
+	db, err := capy.Open(ctx, links, schema)
 	if err != nil {
 		panic(err)
 	}
@@ -44,7 +46,7 @@ func main() {
 	}
 	defer file.Close()
 
-	err = db.Export(ctx, file)
+	err = db.Links().Export(ctx, db.Store().RootLink(), file)
 	if err != nil {
 		panic(err)
 	}

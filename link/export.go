@@ -1,4 +1,4 @@
-package core
+package link
 
 import (
 	"context"
@@ -13,12 +13,12 @@ import (
 )
 
 // Export writes a CAR containing the DAG starting from the given root link to the given io.Writer.
-func Export(ctx context.Context, store *Store, rootLink datamodel.Link, out io.Writer) error {
+func (s *Store) Export(ctx context.Context, rootLink datamodel.Link, out io.Writer) error {
 	cid := rootLink.(cidlink.Link).Cid
 	ssb := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any)
 	sel := ssb.ExploreRecursive(selector.RecursionLimitNone(), ssb.ExploreAll(ssb.ExploreRecursiveEdge()))
 
-	w, err := car.NewSelectiveWriter(ctx, &store.lsys, cid, sel.Node())
+	w, err := car.NewSelectiveWriter(ctx, &s.lsys, cid, sel.Node())
 	if err != nil {
 		return err
 	}

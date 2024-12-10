@@ -2,35 +2,21 @@ package capy
 
 import (
 	"context"
-	"io"
 
 	"github.com/nasdf/capy/core"
 	"github.com/nasdf/capy/graphql"
-	"github.com/nasdf/capy/graphql/schema_gen"
-	"github.com/nasdf/capy/storage"
+	"github.com/nasdf/capy/link"
 
 	"github.com/ipld/go-ipld-prime/datamodel"
-	"github.com/vektah/gqlparser/v2/ast"
 )
 
-// RootLinkKey is the key for the head root link.
-const RootLinkKey = "root"
-
 type DB struct {
-	store    storage.Storage
-	links    *core.Store
-	schema   *ast.Schema
-	rootLink datamodel.Link
+	store *core.Store
+	links *link.Store
 }
 
 // Open creates a new DB instance using the given store and schema.
-func Open(ctx context.Context, store storage.Storage, inputSchema string) (*DB, error) {
-	links := core.NewStore(store)
-
-	schema, err := schema_gen.Execute(inputSchema)
-	if err != nil {
-		return nil, err
-	}
+func Open(ctx context.Context, links *link.Store, inputSchema string) (*DB, error) {
 	rootNode, err := core.BuildRootNode(ctx, links, inputSchema)
 	if err != nil {
 		return nil, err
@@ -39,32 +25,30 @@ func Open(ctx context.Context, store storage.Storage, inputSchema string) (*DB, 
 	if err != nil {
 		return nil, err
 	}
-	err = store.Put(ctx, RootLinkKey, []byte(rootLink.String()))
+	store, err := core.NewStore(ctx, links, rootLink)
 	if err != nil {
 		return nil, err
 	}
 	return &DB{
-		store:    store,
-		links:    links,
-		schema:   schema,
-		rootLink: rootLink,
+		store: store,
+		links: links,
 	}, nil
 }
 
-func (db *DB) Export(ctx context.Context, out io.Writer) error {
-	return core.Export(ctx, db.links, db.rootLink, out)
+func (db *DB) Store() *core.Store {
+	return db.store
 }
 
-func (db *DB) Dump(ctx context.Context) (map[string][]string, error) {
-	return core.Dump(ctx, db.links, db.rootLink)
+func (db *DB) Links() *link.Store {
+	return db.links
 }
 
 func (db *DB) Execute(ctx context.Context, params graphql.QueryParams) (datamodel.Node, error) {
-	tx, err := core.NewTransaction(ctx, db.links, db.schema, db.rootLink)
+	tx, err := db.store.Transaction(ctx)
 	if err != nil {
 		return nil, err
 	}
-	data, err := graphql.Execute(ctx, tx, db.schema, params)
+	data, err := graphql.Execute(ctx, tx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -72,6 +56,9 @@ func (db *DB) Execute(ctx context.Context, params graphql.QueryParams) (datamode
 	if err != nil {
 		return nil, err
 	}
-	db.rootLink = rootLink
+	err = db.store.Merge(ctx, rootLink)
+	if err != nil {
+		return nil, err
+	}
 	return data, nil
 }

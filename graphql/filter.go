@@ -49,7 +49,7 @@ func (e *executionContext) filterDocument(ctx context.Context, collection string
 				return false, err
 			}
 		default:
-			def, ok := e.schema.Types[collection]
+			def, ok := e.store.Schema().Types[collection]
 			if !ok {
 				return false, fmt.Errorf("invalid document type %s", collection)
 			}
@@ -74,7 +74,7 @@ func (e *executionContext) filterNode(ctx context.Context, typ *ast.Type, n data
 	if value == nil {
 		return true, nil
 	}
-	def := e.schema.Types[typ.NamedType]
+	def := e.store.Schema().Types[typ.NamedType]
 	if def.Kind == ast.Object {
 		return e.filterRelation(ctx, typ, n, value.(map[string]any))
 	}

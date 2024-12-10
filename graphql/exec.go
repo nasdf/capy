@@ -33,13 +33,13 @@ type QueryParams struct {
 }
 
 // Execute runs the query and returns a node containing the result of the query operation.
-func Execute(ctx context.Context, store *core.Transaction, schema *ast.Schema, params QueryParams) (datamodel.Node, error) {
+func Execute(ctx context.Context, store *core.Transaction, params QueryParams) (datamodel.Node, error) {
 	nb := basicnode.Prototype.Any.NewBuilder()
 	ma, err := nb.BeginMap(2)
 	if err != nil {
 		return nil, err
 	}
-	err = assignResults(ctx, store, schema, params, ma)
+	err = assignResults(ctx, store, params, ma)
 	if err != nil {
 		return nil, err
 	}
@@ -50,8 +50,8 @@ func Execute(ctx context.Context, store *core.Transaction, schema *ast.Schema, p
 	return nb.Build(), nil
 }
 
-func assignResults(ctx context.Context, store *core.Transaction, schema *ast.Schema, params QueryParams, na datamodel.MapAssembler) error {
-	query, errs := gqlparser.LoadQuery(schema, params.Query)
+func assignResults(ctx context.Context, store *core.Transaction, params QueryParams, na datamodel.MapAssembler) error {
+	query, errs := gqlparser.LoadQuery(store.Schema(), params.Query)
 	if errs != nil {
 		return assignErrors(errs, na)
 	}
@@ -66,7 +66,6 @@ func assignResults(ctx context.Context, store *core.Transaction, schema *ast.Sch
 	}
 	exe := executionContext{
 		store:  store,
-		schema: schema,
 		params: params,
 		query:  query,
 	}
@@ -83,7 +82,6 @@ func assignResults(ctx context.Context, store *core.Transaction, schema *ast.Sch
 
 type executionContext struct {
 	store  *core.Transaction
-	schema *ast.Schema
 	query  *ast.QueryDocument
 	params QueryParams
 }

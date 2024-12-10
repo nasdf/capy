@@ -3,16 +3,43 @@ package core
 import (
 	"context"
 
+	"github.com/nasdf/capy/link"
+
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/fluent/qp"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
-
 	"github.com/vektah/gqlparser/v2"
 	"github.com/vektah/gqlparser/v2/ast"
 )
 
+const (
+	// RootParentsFieldName is the name of the parents field on a root.
+	RootParentsFieldName = "Parents"
+	// RootSchemaFieldName is the name of the schema field on a root.
+	RootSchemaFieldName = "Schema"
+	// RootCollectionsFieldName is the name of the collections field on a root.
+	RootCollectionsFieldName = "Collections"
+	// CollectionDocumentsFieldName is the name of the documents field on a collection.
+	CollectionDocumentsFieldName = "Documents"
+)
+
+// CollectionPath returns the path for the given collection.
+func CollectionPath(collection string) datamodel.Path {
+	return datamodel.ParsePath(RootCollectionsFieldName).AppendSegmentString(collection)
+}
+
+// DocumentsPath returns the path for the documents map of the given collection.
+func DocumentsPath(collection string) datamodel.Path {
+	return CollectionPath(collection).AppendSegmentString(CollectionDocumentsFieldName)
+}
+
+// DocumentPath returns the path for the document in the given collection with the given id.
+func DocumentPath(collection string, id string) datamodel.Path {
+	return DocumentsPath(collection).AppendSegmentString(id)
+}
+
 // BuildRootNode returns a new root node with the collections defined in the given schema.
-func BuildRootNode(ctx context.Context, store *Store, schema string) (datamodel.Node, error) {
+func BuildRootNode(ctx context.Context, store *link.Store, schema string) (datamodel.Node, error) {
 	s, err := gqlparser.LoadSchema(&ast.Source{Input: schema})
 	if err != nil {
 		return nil, err
@@ -50,7 +77,7 @@ func BuildRootParentsNode(parents ...datamodel.Link) (datamodel.Node, error) {
 }
 
 // BuildRootCollectionsNode returns a new collections field node containing the collections defined in the given schema.
-func BuildRootCollectionsNode(ctx context.Context, store *Store, s *ast.Schema) (datamodel.Node, error) {
+func BuildRootCollectionsNode(ctx context.Context, store *link.Store, s *ast.Schema) (datamodel.Node, error) {
 	fields := make(map[string]datamodel.Link)
 	for _, def := range s.Types {
 		if def.BuiltIn || def.Kind != ast.Object {

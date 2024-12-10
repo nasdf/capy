@@ -1,4 +1,4 @@
-package core
+package link
 
 import (
 	"github.com/ipfs/go-cid"

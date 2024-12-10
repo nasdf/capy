@@ -125,7 +125,7 @@ func (e *executionContext) queryDocument(ctx context.Context, collection string,
 			}
 
 		default:
-			def, ok := e.schema.Types[collection]
+			def, ok := e.store.Schema().Types[collection]
 			if !ok {
 				return fmt.Errorf("invalid document type %s", collection)
 			}
@@ -157,7 +157,7 @@ func (e *executionContext) queryNode(ctx context.Context, typ *ast.Type, n datam
 	if typ.Elem != nil {
 		return e.queryList(ctx, typ, n, field, na)
 	}
-	def := e.schema.Types[typ.NamedType]
+	def := e.store.Schema().Types[typ.NamedType]
 	if def.Kind == ast.Object {
 		return e.queryRelation(ctx, typ, n, field, na)
 	}

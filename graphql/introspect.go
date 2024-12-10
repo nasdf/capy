@@ -524,12 +524,12 @@ func (e *executionContext) introspectDirectives(obj []introspection.Directive, s
 }
 
 func (e *executionContext) introspectSchemaTypes(sel ast.SelectionSet, na datamodel.NodeAssembler) error {
-	la, err := na.BeginList(int64(len(e.schema.Types)))
+	la, err := na.BeginList(int64(len(e.store.Schema().Types)))
 	if err != nil {
 		return err
 	}
-	for _, t := range e.schema.Types {
-		err = e.introspectType(introspection.WrapTypeFromDef(e.schema, t), sel, la.AssembleValue())
+	for _, t := range e.store.Schema().Types {
+		err = e.introspectType(introspection.WrapTypeFromDef(e.store.Schema(), t), sel, la.AssembleValue())
 		if err != nil {
 			return err
 		}
@@ -568,14 +568,14 @@ func (e *executionContext) introspectInputValues(obj []introspection.InputValue,
 }
 
 func (e *executionContext) introspectQuerySchema(field graphql.CollectedField, na datamodel.NodeAssembler) error {
-	typ := introspection.WrapSchema(e.schema)
+	typ := introspection.WrapSchema(e.store.Schema())
 	return e.introspectSchema(typ, field.SelectionSet, na)
 }
 
 func (e *executionContext) introspectQueryType(field graphql.CollectedField, na datamodel.NodeAssembler) error {
 	args := field.ArgumentMap(e.params.Variables)
 	name := args["name"].(string)
-	typ := introspection.WrapTypeFromDef(e.schema, e.schema.Types[name])
+	typ := introspection.WrapTypeFromDef(e.store.Schema(), e.store.Schema().Types[name])
 	return e.introspectType(typ, field.SelectionSet, na)
 }
 
