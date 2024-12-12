@@ -15,15 +15,15 @@ type DocumentIterator struct {
 	it    datamodel.MapIterator
 }
 
-// DocumentIterator returns a new iterator that can be used to iterate through all documents in a collection.
-func (t *Transaction) DocumentIterator(ctx context.Context, collection string) (*DocumentIterator, error) {
+// NewDocumentIterator returns a new iterator that can be used to iterate through all documents in a collection.
+func NewDocumentIterator(ctx context.Context, links *link.Store, collection string, rootNode datamodel.Node) (*DocumentIterator, error) {
 	documentsPath := DocumentsPath(collection)
-	documentsNode, err := t.links.GetNode(ctx, documentsPath, t.rootNode)
+	documentsNode, err := links.GetNode(ctx, documentsPath, rootNode)
 	if err != nil {
 		return nil, err
 	}
 	return &DocumentIterator{
-		links: t.links,
+		links: links,
 		it:    documentsNode.MapIterator(),
 	}, nil
 }

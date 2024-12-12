@@ -17,7 +17,7 @@ type DB struct {
 
 // Open creates a new DB instance using the given store and schema.
 func Open(ctx context.Context, links *link.Store, inputSchema string) (*DB, error) {
-	rootNode, err := core.BuildRootNode(ctx, links, inputSchema)
+	rootNode, err := core.BuildInitialRootNode(ctx, links, inputSchema)
 	if err != nil {
 		return nil, err
 	}

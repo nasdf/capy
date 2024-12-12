@@ -17,7 +17,7 @@ func TestMergeBaseSimple(t *testing.T) {
 	links := link.NewStore(storage.NewMemory())
 	inputSchema := "type User { name: String }"
 
-	rootNode, err := BuildRootNode(ctx, links, inputSchema)
+	rootNode, err := BuildInitialRootNode(ctx, links, inputSchema)
 	require.NoError(t, err)
 
 	rootLink, err := links.Store(ctx, rootNode)
@@ -56,7 +56,7 @@ func TestMergeBaseFastForward(t *testing.T) {
 	links := link.NewStore(storage.NewMemory())
 	inputSchema := "type User { name: String }"
 
-	rootNode, err := BuildRootNode(ctx, links, inputSchema)
+	rootNode, err := BuildInitialRootNode(ctx, links, inputSchema)
 	require.NoError(t, err)
 
 	rootLink, err := links.Store(ctx, rootNode)
@@ -89,7 +89,7 @@ func TestIndependentsSimple(t *testing.T) {
 	links := link.NewStore(storage.NewMemory())
 	inputSchema := "type User { name: String }"
 
-	rootNode, err := BuildRootNode(ctx, links, inputSchema)
+	rootNode, err := BuildInitialRootNode(ctx, links, inputSchema)
 	require.NoError(t, err)
 
 	rootLink, err := links.Store(ctx, rootNode)

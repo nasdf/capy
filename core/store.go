@@ -16,6 +16,7 @@ type Store struct {
 	links    *link.Store
 	schema   *ast.Schema
 	rootLink datamodel.Link
+	resolver MergeConflictResolver
 }
 
 func NewStore(ctx context.Context, links *link.Store, rootLink datamodel.Link) (*Store, error) {
@@ -40,6 +41,7 @@ func NewStore(ctx context.Context, links *link.Store, rootLink datamodel.Link) (
 		links:    links,
 		schema:   schema,
 		rootLink: rootLink,
+		resolver: TheirsConflictResolver,
 	}, nil
 }
 
@@ -55,19 +57,21 @@ func (s *Store) Merge(ctx context.Context, rootLink datamodel.Link) error {
 	if len(bases) == 0 {
 		return fmt.Errorf("no merge base found")
 	}
-	switch bases[0] {
-	case s.rootLink:
-		// fast-forward merge
+	// nothing to merge
+	if bases[0] == rootLink {
+		return nil
+	}
+	// fast-forward merge
+	if bases[0] == s.rootLink {
 		s.rootLink = rootLink
 		return nil
-
-	case rootLink:
-		// nothing to merge
-		return nil
-
-	default:
-		return fmt.Errorf("merge not implemented")
 	}
+	mergeLink, err := s.mergeRoot(ctx, bases[0], s.rootLink, rootLink)
+	if err != nil {
+		return err
+	}
+	s.rootLink = mergeLink
+	return nil
 }
 
 // MergeBase returns the best common ancestor for merging the two given links.
@@ -113,7 +117,6 @@ func (s *Store) Independents(ctx context.Context, links []datamodel.Link) ([]dat
 
 	seen := make(map[string]struct{})
 	keep := make(map[string]struct{})
-
 	for _, l := range links {
 		keep[l.String()] = struct{}{}
 	}
@@ -124,7 +127,7 @@ func (s *Store) Independents(ctx context.Context, links []datamodel.Link) ([]dat
 			continue
 		}
 		iter := s.ParentIterator(l)
-		for !iter.Done() {
+		for !iter.Done() && len(links) > 1 {
 			lnk, _, err := iter.Next(ctx)
 			if err != nil {
 				return nil, err
@@ -148,7 +151,6 @@ func (s *Store) Independents(ctx context.Context, links []datamodel.Link) ([]dat
 			result = append(result, l)
 		}
 	}
-
 	return result, nil
 }
 

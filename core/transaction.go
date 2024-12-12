@@ -60,6 +60,11 @@ func (t *Transaction) Commit(ctx context.Context) (datamodel.Link, error) {
 	return t.links.Store(ctx, rootNode)
 }
 
+// DocumentIterator returns a new iterator that can be used to iterate through all documents in a collection.
+func (t *Transaction) DocumentIterator(ctx context.Context, collection string) (*DocumentIterator, error) {
+	return NewDocumentIterator(ctx, t.links, collection, t.rootNode)
+}
+
 // ReadDocument returns the document in the given collection with the given id.
 func (t *Transaction) ReadDocument(ctx context.Context, collection, id string) (datamodel.Node, error) {
 	return t.links.GetNode(ctx, DocumentPath(collection, id), t.rootNode)
