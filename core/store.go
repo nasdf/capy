@@ -127,7 +127,7 @@ func (s *Store) Independents(ctx context.Context, links []datamodel.Link) ([]dat
 			continue
 		}
 		iter := s.ParentIterator(l)
-		for !iter.Done() && len(links) > 1 {
+		for !iter.Done() && len(keep) > 1 {
 			lnk, _, err := iter.Next(ctx)
 			if err != nil {
 				return nil, err

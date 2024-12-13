@@ -3,9 +3,10 @@ package core
 import (
 	"context"
 
+	"github.com/nasdf/capy/link"
+
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
-	"github.com/nasdf/capy/link"
 )
 
 // MergeConflictResolver is a callback function that is used to resolver merge conflicts.
@@ -119,7 +120,10 @@ func (s *Store) mergeMap(ctx context.Context, base, ours, theirs datamodel.Node,
 		return err
 	}
 	seen := make(map[string]struct{})
-	iter := tryMapIterator(base)
+	var iter datamodel.MapIterator
+	if base != nil {
+		iter = base.MapIterator()
+	}
 	for iter != nil && !iter.Done() {
 		k, v, err := iter.Next()
 		if err != nil {
@@ -147,7 +151,9 @@ func (s *Store) mergeMap(ctx context.Context, base, ours, theirs datamodel.Node,
 		}
 		seen[prop] = struct{}{}
 	}
-	iter = tryMapIterator(ours)
+	if ours != nil {
+		iter = ours.MapIterator()
+	}
 	for iter != nil && !iter.Done() {
 		k, v, err := iter.Next()
 		if err != nil {
@@ -179,7 +185,9 @@ func (s *Store) mergeMap(ctx context.Context, base, ours, theirs datamodel.Node,
 		}
 		seen[prop] = struct{}{}
 	}
-	iter = tryMapIterator(theirs)
+	if theirs != nil {
+		iter = theirs.MapIterator()
+	}
 	for iter != nil && !iter.Done() {
 		k, v, err := iter.Next()
 		if err != nil {
@@ -238,13 +246,6 @@ func (s *Store) mergeLink(ctx context.Context, base, ours, theirs datamodel.Node
 		return err
 	}
 	return na.AssignLink(lnk)
-}
-
-func tryMapIterator(node datamodel.Node) datamodel.MapIterator {
-	if node == nil {
-		return nil
-	}
-	return node.MapIterator()
 }
 
 func tryLookupByString(node datamodel.Node, prop string) (datamodel.Node, error) {

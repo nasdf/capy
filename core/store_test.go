@@ -106,6 +106,9 @@ func TestIndependentsSimple(t *testing.T) {
 		rootLink, err = tx.Commit(ctx)
 		require.NoError(t, err)
 
+		err = store.Merge(ctx, rootLink)
+		require.NoError(t, err)
+
 		commits[i] = rootLink
 	}
 
