@@ -1,10 +1,55 @@
 package graphql
 
 import (
+	"context"
+
 	"github.com/ipld/go-ipld-prime/datamodel"
+	"github.com/ipld/go-ipld-prime/node/basicnode"
+	"github.com/nasdf/capy/core"
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 )
+
+// QueryParams contains all of the parameters for a query.
+type QueryParams struct {
+	Query         string         `json:"query"`
+	OperationName string         `json:"operationName"`
+	Variables     map[string]any `json:"variables"`
+}
+
+// Execute runs the query and returns a node containing the result of the query operation.
+func Execute(ctx context.Context, store *core.Transaction, params QueryParams) (datamodel.Node, error) {
+	nb := basicnode.Prototype.Any.NewBuilder()
+	ma, err := nb.BeginMap(2)
+	if err != nil {
+		return nil, err
+	}
+	err = assignResults(ctx, store, params, ma)
+	if err != nil {
+		return nil, err
+	}
+	err = ma.Finish()
+	if err != nil {
+		return nil, err
+	}
+	return nb.Build(), nil
+}
+
+func assignResults(ctx context.Context, store *core.Transaction, params QueryParams, na datamodel.MapAssembler) error {
+	exe, errs := createExecutionContext(store, params)
+	if errs != nil {
+		return assignErrors(errs, na)
+	}
+	data, err := exe.execute(ctx)
+	if err != nil {
+		return assignErrors(gqlerror.List{gqlerror.WrapIfUnwrapped(err)}, na)
+	}
+	va, err := na.AssembleEntry("data")
+	if err != nil {
+		return err
+	}
+	return va.AssignNode(data)
+}
 
 func assignErrors(list gqlerror.List, na datamodel.MapAssembler) error {
 	if len(list) == 0 {

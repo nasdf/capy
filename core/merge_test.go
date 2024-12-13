@@ -31,10 +31,10 @@ func TestMergeSimple(t *testing.T) {
 	txB, err := store.Transaction(ctx)
 	require.NoError(t, err)
 
-	_, err = txA.CreateDocument(ctx, "User", map[string]any{"name": "Bob"})
+	_, err = txA.CreateDocument(ctx, "User", map[string]any{"name": "Alice"})
 	require.NoError(t, err)
 
-	_, err = txB.CreateDocument(ctx, "User", map[string]any{"name": "Alice"})
+	_, err = txB.CreateDocument(ctx, "User", map[string]any{"name": "Bob"})
 	require.NoError(t, err)
 
 	linkA, err := txA.Commit(ctx)
