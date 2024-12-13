@@ -11,7 +11,7 @@ import (
 	"github.com/vektah/gqlparser/v2/gqlerror"
 )
 
-func (e *executionContext) executeQuery(ctx context.Context, set ast.SelectionSet, na datamodel.NodeAssembler) error {
+func (e *Context) executeQuery(ctx context.Context, set ast.SelectionSet, na datamodel.NodeAssembler) error {
 	fields := e.collectFields(set, "Query")
 	ma, err := na.BeginMap(int64(len(fields)))
 	if err != nil {
@@ -63,8 +63,8 @@ func (e *executionContext) executeQuery(ctx context.Context, set ast.SelectionSe
 	return ma.Finish()
 }
 
-func (e *executionContext) findQuery(ctx context.Context, field graphql.CollectedField, collection string, id string, na datamodel.NodeAssembler) error {
-	doc, err := e.store.ReadDocument(ctx, collection, id)
+func (e *Context) findQuery(ctx context.Context, field graphql.CollectedField, collection string, id string, na datamodel.NodeAssembler) error {
+	doc, err := e.collections.ReadDocument(ctx, collection, id)
 	if err != nil {
 		return err
 	}
@@ -72,12 +72,12 @@ func (e *executionContext) findQuery(ctx context.Context, field graphql.Collecte
 	return e.queryDocument(ctx, collection, doc, field, na)
 }
 
-func (e *executionContext) listQuery(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) error {
+func (e *Context) listQuery(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) error {
 	la, err := na.BeginList(0)
 	if err != nil {
 		return err
 	}
-	iter, err := e.store.DocumentIterator(ctx, collection)
+	iter, err := e.collections.DocumentIterator(ctx, collection)
 	if err != nil {
 		return err
 	}
@@ -100,7 +100,7 @@ func (e *executionContext) listQuery(ctx context.Context, field graphql.Collecte
 	return la.Finish()
 }
 
-func (e *executionContext) queryDocument(ctx context.Context, collection string, n datamodel.Node, field graphql.CollectedField, na datamodel.NodeAssembler) error {
+func (e *Context) queryDocument(ctx context.Context, collection string, n datamodel.Node, field graphql.CollectedField, na datamodel.NodeAssembler) error {
 	fields := e.collectFields(field.SelectionSet, collection)
 	ma, err := na.BeginMap(int64(len(fields)))
 	if err != nil {
@@ -125,7 +125,7 @@ func (e *executionContext) queryDocument(ctx context.Context, collection string,
 			}
 
 		default:
-			def, ok := e.store.Schema().Types[collection]
+			def, ok := e.schema.Types[collection]
 			if !ok {
 				return fmt.Errorf("invalid document type %s", collection)
 			}
@@ -150,33 +150,33 @@ func (e *executionContext) queryDocument(ctx context.Context, collection string,
 	return ma.Finish()
 }
 
-func (e *executionContext) queryNode(ctx context.Context, typ *ast.Type, n datamodel.Node, field graphql.CollectedField, na datamodel.NodeAssembler) error {
+func (e *Context) queryNode(ctx context.Context, typ *ast.Type, n datamodel.Node, field graphql.CollectedField, na datamodel.NodeAssembler) error {
 	if len(field.SelectionSet) == 0 {
 		return na.AssignNode(n)
 	}
 	if typ.Elem != nil {
 		return e.queryList(ctx, typ, n, field, na)
 	}
-	def := e.store.Schema().Types[typ.NamedType]
+	def := e.schema.Types[typ.NamedType]
 	if def.Kind == ast.Object {
 		return e.queryRelation(ctx, typ, n, field, na)
 	}
 	return gqlerror.ErrorPosf(field.Position, "cannot traverse node of type %s", n.Kind().String())
 }
 
-func (e *executionContext) queryRelation(ctx context.Context, typ *ast.Type, n datamodel.Node, field graphql.CollectedField, na datamodel.NodeAssembler) error {
+func (e *Context) queryRelation(ctx context.Context, typ *ast.Type, n datamodel.Node, field graphql.CollectedField, na datamodel.NodeAssembler) error {
 	id, err := n.AsString()
 	if err != nil {
 		return err
 	}
-	doc, err := e.store.ReadDocument(ctx, typ.NamedType, id)
+	doc, err := e.collections.ReadDocument(ctx, typ.NamedType, id)
 	if err != nil {
 		return err
 	}
 	return e.queryDocument(ctx, typ.NamedType, doc, field, na)
 }
 
-func (e *executionContext) queryList(ctx context.Context, typ *ast.Type, n datamodel.Node, field graphql.CollectedField, na datamodel.NodeAssembler) error {
+func (e *Context) queryList(ctx context.Context, typ *ast.Type, n datamodel.Node, field graphql.CollectedField, na datamodel.NodeAssembler) error {
 	la, err := na.BeginList(n.Length())
 	if err != nil {
 		return err

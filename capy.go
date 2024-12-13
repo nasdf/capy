@@ -10,13 +10,8 @@ import (
 	"github.com/ipld/go-ipld-prime/datamodel"
 )
 
-type DB struct {
-	store *core.Store
-	links *link.Store
-}
-
 // Open creates a new DB instance using the given store and schema.
-func Open(ctx context.Context, links *link.Store, inputSchema string) (*DB, error) {
+func Open(ctx context.Context, links *link.Store, inputSchema string) (*core.Store, error) {
 	rootNode, err := core.BuildInitialRootNode(ctx, links, inputSchema)
 	if err != nil {
 		return nil, err
@@ -25,30 +20,15 @@ func Open(ctx context.Context, links *link.Store, inputSchema string) (*DB, erro
 	if err != nil {
 		return nil, err
 	}
-	store, err := core.NewStore(ctx, links, rootLink)
+	return core.NewStore(ctx, links, rootLink)
+}
+
+func Execute(ctx context.Context, store *core.Store, params graphql.QueryParams) (datamodel.Node, error) {
+	tx, err := store.Collections(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return &DB{
-		store: store,
-		links: links,
-	}, nil
-}
-
-func (db *DB) Store() *core.Store {
-	return db.store
-}
-
-func (db *DB) Links() *link.Store {
-	return db.links
-}
-
-func (db *DB) Execute(ctx context.Context, params graphql.QueryParams) (datamodel.Node, error) {
-	tx, err := db.store.Transaction(ctx)
-	if err != nil {
-		return nil, err
-	}
-	data, err := graphql.Execute(ctx, tx, params)
+	data, err := graphql.Execute(ctx, tx, store.Schema(), params)
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +36,7 @@ func (db *DB) Execute(ctx context.Context, params graphql.QueryParams) (datamode
 	if err != nil {
 		return nil, err
 	}
-	err = db.store.Merge(ctx, rootLink)
+	err = store.Merge(ctx, rootLink)
 	if err != nil {
 		return nil, err
 	}

@@ -7,7 +7,7 @@ import (
 	"github.com/vektah/gqlparser/v2/ast"
 )
 
-func (e *executionContext) introspectSchema(obj *introspection.Schema, sel ast.SelectionSet, na datamodel.NodeAssembler) error {
+func (e *Context) introspectSchema(obj *introspection.Schema, sel ast.SelectionSet, na datamodel.NodeAssembler) error {
 	fields := e.collectFields(sel, "__Schema")
 	ma, err := na.BeginMap(int64(len(fields)))
 	if err != nil {
@@ -79,7 +79,7 @@ func (e *executionContext) introspectSchema(obj *introspection.Schema, sel ast.S
 	return ma.Finish()
 }
 
-func (e *executionContext) introspectType(obj *introspection.Type, sel ast.SelectionSet, na datamodel.NodeAssembler) error {
+func (e *Context) introspectType(obj *introspection.Type, sel ast.SelectionSet, na datamodel.NodeAssembler) error {
 	fields := e.collectFields(sel, "__Type")
 	if obj == nil {
 		return na.AssignNull()
@@ -202,7 +202,7 @@ func (e *executionContext) introspectType(obj *introspection.Type, sel ast.Selec
 	return ma.Finish()
 }
 
-func (e *executionContext) introspectField(obj *introspection.Field, sel ast.SelectionSet, na datamodel.NodeAssembler) error {
+func (e *Context) introspectField(obj *introspection.Field, sel ast.SelectionSet, na datamodel.NodeAssembler) error {
 	fields := e.collectFields(sel, "__Field")
 	ma, err := na.BeginMap(int64(len(fields)))
 	if err != nil {
@@ -292,7 +292,7 @@ func (e *executionContext) introspectField(obj *introspection.Field, sel ast.Sel
 	return ma.Finish()
 }
 
-func (e *executionContext) introspectInputValue(obj introspection.InputValue, sel ast.SelectionSet, na datamodel.NodeAssembler) error {
+func (e *Context) introspectInputValue(obj introspection.InputValue, sel ast.SelectionSet, na datamodel.NodeAssembler) error {
 	fields := e.collectFields(sel, "__InputValue")
 	ma, err := na.BeginMap(int64(len(fields)))
 	if err != nil {
@@ -362,7 +362,7 @@ func (e *executionContext) introspectInputValue(obj introspection.InputValue, se
 	return ma.Finish()
 }
 
-func (e *executionContext) introspectEnumValue(obj introspection.EnumValue, sel ast.SelectionSet, na datamodel.NodeAssembler) error {
+func (e *Context) introspectEnumValue(obj introspection.EnumValue, sel ast.SelectionSet, na datamodel.NodeAssembler) error {
 	fields := e.collectFields(sel, "__EnumValue")
 	ma, err := na.BeginMap(int64(len(fields)))
 	if err != nil {
@@ -433,7 +433,7 @@ func (e *executionContext) introspectEnumValue(obj introspection.EnumValue, sel 
 	return ma.Finish()
 }
 
-func (e *executionContext) introspectDirective(obj introspection.Directive, sel ast.SelectionSet, na datamodel.NodeAssembler) error {
+func (e *Context) introspectDirective(obj introspection.Directive, sel ast.SelectionSet, na datamodel.NodeAssembler) error {
 	fields := e.collectFields(sel, "__Directive")
 	ma, err := na.BeginMap(int64(len(fields)))
 	if err != nil {
@@ -509,7 +509,7 @@ func (e *executionContext) introspectDirective(obj introspection.Directive, sel 
 	return ma.Finish()
 }
 
-func (e *executionContext) introspectDirectives(obj []introspection.Directive, sel ast.SelectionSet, na datamodel.NodeAssembler) error {
+func (e *Context) introspectDirectives(obj []introspection.Directive, sel ast.SelectionSet, na datamodel.NodeAssembler) error {
 	la, err := na.BeginList(int64(len(obj)))
 	if err != nil {
 		return err
@@ -523,13 +523,13 @@ func (e *executionContext) introspectDirectives(obj []introspection.Directive, s
 	return la.Finish()
 }
 
-func (e *executionContext) introspectSchemaTypes(sel ast.SelectionSet, na datamodel.NodeAssembler) error {
-	la, err := na.BeginList(int64(len(e.store.Schema().Types)))
+func (e *Context) introspectSchemaTypes(sel ast.SelectionSet, na datamodel.NodeAssembler) error {
+	la, err := na.BeginList(int64(len(e.schema.Types)))
 	if err != nil {
 		return err
 	}
-	for _, t := range e.store.Schema().Types {
-		err = e.introspectType(introspection.WrapTypeFromDef(e.store.Schema(), t), sel, la.AssembleValue())
+	for _, t := range e.schema.Types {
+		err = e.introspectType(introspection.WrapTypeFromDef(e.schema, t), sel, la.AssembleValue())
 		if err != nil {
 			return err
 		}
@@ -537,7 +537,7 @@ func (e *executionContext) introspectSchemaTypes(sel ast.SelectionSet, na datamo
 	return la.Finish()
 }
 
-func (e *executionContext) introspectTypeEnumValues(obj *introspection.Type, field *ast.Field, na datamodel.NodeAssembler) error {
+func (e *Context) introspectTypeEnumValues(obj *introspection.Type, field *ast.Field, na datamodel.NodeAssembler) error {
 	args := field.ArgumentMap(e.params.Variables)
 	vals := obj.EnumValues(args["includeDeprecated"].(bool))
 	la, err := na.BeginList(int64(len(vals)))
@@ -553,7 +553,7 @@ func (e *executionContext) introspectTypeEnumValues(obj *introspection.Type, fie
 	return la.Finish()
 }
 
-func (e *executionContext) introspectInputValues(obj []introspection.InputValue, sel ast.SelectionSet, na datamodel.NodeAssembler) error {
+func (e *Context) introspectInputValues(obj []introspection.InputValue, sel ast.SelectionSet, na datamodel.NodeAssembler) error {
 	la, err := na.BeginList(int64(len(obj)))
 	if err != nil {
 		return err
@@ -567,19 +567,19 @@ func (e *executionContext) introspectInputValues(obj []introspection.InputValue,
 	return la.Finish()
 }
 
-func (e *executionContext) introspectQuerySchema(field graphql.CollectedField, na datamodel.NodeAssembler) error {
-	typ := introspection.WrapSchema(e.store.Schema())
+func (e *Context) introspectQuerySchema(field graphql.CollectedField, na datamodel.NodeAssembler) error {
+	typ := introspection.WrapSchema(e.schema)
 	return e.introspectSchema(typ, field.SelectionSet, na)
 }
 
-func (e *executionContext) introspectQueryType(field graphql.CollectedField, na datamodel.NodeAssembler) error {
+func (e *Context) introspectQueryType(field graphql.CollectedField, na datamodel.NodeAssembler) error {
 	args := field.ArgumentMap(e.params.Variables)
 	name := args["name"].(string)
-	typ := introspection.WrapTypeFromDef(e.store.Schema(), e.store.Schema().Types[name])
+	typ := introspection.WrapTypeFromDef(e.schema, e.schema.Types[name])
 	return e.introspectType(typ, field.SelectionSet, na)
 }
 
-func (e *executionContext) introspectTypeFields(typ *introspection.Type, field *ast.Field, na datamodel.NodeAssembler) error {
+func (e *Context) introspectTypeFields(typ *introspection.Type, field *ast.Field, na datamodel.NodeAssembler) error {
 	args := field.ArgumentMap(e.params.Variables)
 	vals := typ.Fields(args["includeDeprecated"].(bool))
 	la, err := na.BeginList(int64(len(vals)))
@@ -595,7 +595,7 @@ func (e *executionContext) introspectTypeFields(typ *introspection.Type, field *
 	return la.Finish()
 }
 
-func (e *executionContext) introspectTypes(obj []introspection.Type, sel ast.SelectionSet, na datamodel.NodeAssembler) error {
+func (e *Context) introspectTypes(obj []introspection.Type, sel ast.SelectionSet, na datamodel.NodeAssembler) error {
 	la, err := na.BeginList(int64(len(obj)))
 	if err != nil {
 		return err

@@ -27,7 +27,7 @@ const (
 	noneFilter           = "none"
 )
 
-func (e *executionContext) filterDocument(ctx context.Context, collection string, n datamodel.Node, value any) (bool, error) {
+func (e *Context) filterDocument(ctx context.Context, collection string, n datamodel.Node, value any) (bool, error) {
 	if value == nil {
 		return true, nil
 	}
@@ -49,7 +49,7 @@ func (e *executionContext) filterDocument(ctx context.Context, collection string
 				return false, err
 			}
 		default:
-			def, ok := e.store.Schema().Types[collection]
+			def, ok := e.schema.Types[collection]
 			if !ok {
 				return false, fmt.Errorf("invalid document type %s", collection)
 			}
@@ -70,11 +70,11 @@ func (e *executionContext) filterDocument(ctx context.Context, collection string
 	return true, nil
 }
 
-func (e *executionContext) filterNode(ctx context.Context, typ *ast.Type, n datamodel.Node, value any) (bool, error) {
+func (e *Context) filterNode(ctx context.Context, typ *ast.Type, n datamodel.Node, value any) (bool, error) {
 	if value == nil {
 		return true, nil
 	}
-	def := e.store.Schema().Types[typ.NamedType]
+	def := e.schema.Types[typ.NamedType]
 	if def.Kind == ast.Object {
 		return e.filterRelation(ctx, typ, n, value.(map[string]any))
 	}
@@ -142,7 +142,7 @@ func (e *executionContext) filterNode(ctx context.Context, typ *ast.Type, n data
 	return true, nil
 }
 
-func (e *executionContext) filterRelation(ctx context.Context, typ *ast.Type, n datamodel.Node, value any) (bool, error) {
+func (e *Context) filterRelation(ctx context.Context, typ *ast.Type, n datamodel.Node, value any) (bool, error) {
 	if value == nil {
 		return true, nil
 	}
@@ -150,14 +150,14 @@ func (e *executionContext) filterRelation(ctx context.Context, typ *ast.Type, n 
 	if err != nil {
 		return false, err
 	}
-	doc, err := e.store.ReadDocument(ctx, typ.NamedType, id)
+	doc, err := e.collections.ReadDocument(ctx, typ.NamedType, id)
 	if err != nil {
 		return false, err
 	}
 	return e.filterDocument(ctx, typ.NamedType, doc, value)
 }
 
-func (e *executionContext) filterAnd(ctx context.Context, collection string, n datamodel.Node, value any) (bool, error) {
+func (e *Context) filterAnd(ctx context.Context, collection string, n datamodel.Node, value any) (bool, error) {
 	if value == nil {
 		return true, nil
 	}
@@ -170,7 +170,7 @@ func (e *executionContext) filterAnd(ctx context.Context, collection string, n d
 	return true, nil
 }
 
-func (e *executionContext) filterOr(ctx context.Context, collection string, n datamodel.Node, value any) (bool, error) {
+func (e *Context) filterOr(ctx context.Context, collection string, n datamodel.Node, value any) (bool, error) {
 	if value == nil {
 		return true, nil
 	}
@@ -183,7 +183,7 @@ func (e *executionContext) filterOr(ctx context.Context, collection string, n da
 	return true, nil
 }
 
-func (e *executionContext) filterAll(ctx context.Context, typ *ast.Type, n datamodel.Node, value any) (bool, error) {
+func (e *Context) filterAll(ctx context.Context, typ *ast.Type, n datamodel.Node, value any) (bool, error) {
 	if value == nil {
 		return true, nil
 	}
@@ -201,7 +201,7 @@ func (e *executionContext) filterAll(ctx context.Context, typ *ast.Type, n datam
 	return true, nil
 }
 
-func (e *executionContext) filterAny(ctx context.Context, typ *ast.Type, n datamodel.Node, value any) (bool, error) {
+func (e *Context) filterAny(ctx context.Context, typ *ast.Type, n datamodel.Node, value any) (bool, error) {
 	if value == nil {
 		return true, nil
 	}

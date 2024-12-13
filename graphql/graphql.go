@@ -3,9 +3,10 @@ package graphql
 import (
 	"context"
 
+	"github.com/nasdf/capy/core"
+
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
-	"github.com/nasdf/capy/core"
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 )
@@ -18,13 +19,13 @@ type QueryParams struct {
 }
 
 // Execute runs the query and returns a node containing the result of the query operation.
-func Execute(ctx context.Context, store *core.Transaction, params QueryParams) (datamodel.Node, error) {
+func Execute(ctx context.Context, collections *core.Collections, schema *ast.Schema, params QueryParams) (datamodel.Node, error) {
 	nb := basicnode.Prototype.Any.NewBuilder()
 	ma, err := nb.BeginMap(2)
 	if err != nil {
 		return nil, err
 	}
-	err = assignResults(ctx, store, params, ma)
+	err = assignResults(ctx, collections, schema, params, ma)
 	if err != nil {
 		return nil, err
 	}
@@ -35,12 +36,12 @@ func Execute(ctx context.Context, store *core.Transaction, params QueryParams) (
 	return nb.Build(), nil
 }
 
-func assignResults(ctx context.Context, store *core.Transaction, params QueryParams, na datamodel.MapAssembler) error {
-	exe, errs := createExecutionContext(store, params)
+func assignResults(ctx context.Context, collections *core.Collections, schema *ast.Schema, params QueryParams, na datamodel.MapAssembler) error {
+	exe, errs := NewContext(collections, schema, params)
 	if errs != nil {
 		return assignErrors(errs, na)
 	}
-	data, err := exe.execute(ctx)
+	data, err := exe.Execute(ctx)
 	if err != nil {
 		return assignErrors(gqlerror.List{gqlerror.WrapIfUnwrapped(err)}, na)
 	}

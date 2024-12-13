@@ -16,14 +16,14 @@ type DocumentIterator struct {
 }
 
 // NewDocumentIterator returns a new iterator that can be used to iterate through all documents in a collection.
-func NewDocumentIterator(ctx context.Context, links *link.Store, collection string, rootNode datamodel.Node) (*DocumentIterator, error) {
+func (c *Collections) DocumentIterator(ctx context.Context, collection string) (*DocumentIterator, error) {
 	documentsPath := DocumentsPath(collection)
-	documentsNode, err := links.GetNode(ctx, documentsPath, rootNode)
+	documentsNode, err := c.links.GetNode(ctx, documentsPath, c.rootNode)
 	if err != nil {
 		return nil, err
 	}
 	return &DocumentIterator{
-		links: links,
+		links: c.links,
 		it:    documentsNode.MapIterator(),
 	}, nil
 }

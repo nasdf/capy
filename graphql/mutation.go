@@ -10,7 +10,7 @@ import (
 	"github.com/vektah/gqlparser/v2/gqlerror"
 )
 
-func (e *executionContext) executeMutation(ctx context.Context, set ast.SelectionSet, na datamodel.NodeAssembler) error {
+func (e *Context) executeMutation(ctx context.Context, set ast.SelectionSet, na datamodel.NodeAssembler) error {
 	fields := e.collectFields(set, "Mutation")
 	ma, err := na.BeginMap(int64(len(fields)))
 	if err != nil {
@@ -50,22 +50,22 @@ func (e *executionContext) executeMutation(ctx context.Context, set ast.Selectio
 	return ma.Finish()
 }
 
-func (e *executionContext) createMutation(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) error {
+func (e *Context) createMutation(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) error {
 	args := field.ArgumentMap(e.params.Variables)
 	data, _ := args["data"].(map[string]any)
-	id, err := e.store.CreateDocument(ctx, collection, data)
+	id, err := e.collections.CreateDocument(ctx, collection, data)
 	if err != nil {
 		return err
 	}
 	return e.findQuery(ctx, field, collection, id, na)
 }
 
-func (e *executionContext) updateMutation(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) error {
+func (e *Context) updateMutation(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) error {
 	args := field.ArgumentMap(e.params.Variables)
 	filter, _ := args["filter"].(map[string]any)
 	patch, _ := args["patch"].(map[string]any)
 
-	iter, err := e.store.DocumentIterator(ctx, collection)
+	iter, err := e.collections.DocumentIterator(ctx, collection)
 	if err != nil {
 		return err
 	}
@@ -81,7 +81,7 @@ func (e *executionContext) updateMutation(ctx context.Context, field graphql.Col
 		if err != nil || !match {
 			return err
 		}
-		err = e.store.PatchDocument(ctx, collection, id, patch)
+		err = e.collections.PatchDocument(ctx, collection, id, patch)
 		if err != nil {
 			return err
 		}
@@ -92,7 +92,7 @@ func (e *executionContext) updateMutation(ctx context.Context, field graphql.Col
 		return err
 	}
 	for _, id := range ids {
-		doc, err := e.store.ReadDocument(ctx, collection, id)
+		doc, err := e.collections.ReadDocument(ctx, collection, id)
 		if err != nil {
 			return err
 		}
@@ -105,7 +105,7 @@ func (e *executionContext) updateMutation(ctx context.Context, field graphql.Col
 	return la.Finish()
 }
 
-func (e *executionContext) deleteMutation(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) error {
+func (e *Context) deleteMutation(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) error {
 	args := field.ArgumentMap(e.params.Variables)
 	filter, _ := args["filter"].(map[string]any)
 
@@ -113,7 +113,7 @@ func (e *executionContext) deleteMutation(ctx context.Context, field graphql.Col
 	if err != nil {
 		return err
 	}
-	iter, err := e.store.DocumentIterator(ctx, collection)
+	iter, err := e.collections.DocumentIterator(ctx, collection)
 	if err != nil {
 		return err
 	}
@@ -131,7 +131,7 @@ func (e *executionContext) deleteMutation(ctx context.Context, field graphql.Col
 		if err != nil {
 			return err
 		}
-		err = e.store.DeleteDocument(ctx, collection, id)
+		err = e.collections.DeleteDocument(ctx, collection, id)
 		if err != nil {
 			return err
 		}

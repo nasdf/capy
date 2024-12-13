@@ -30,7 +30,7 @@ func main() {
 		panic(err)
 	}
 
-	res, err := db.Execute(ctx, graphql.QueryParams{Query: mutation})
+	res, err := capy.Execute(ctx, db, graphql.QueryParams{Query: mutation})
 	if err != nil {
 		panic(err)
 	}
@@ -46,7 +46,7 @@ func main() {
 	}
 	defer file.Close()
 
-	err = db.Links().Export(ctx, db.Store().RootLink(), file)
+	err = links.Export(ctx, db.RootLink(), file)
 	if err != nil {
 		panic(err)
 	}

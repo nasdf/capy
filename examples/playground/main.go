@@ -11,6 +11,7 @@ import (
 	"os"
 
 	"github.com/nasdf/capy"
+	"github.com/nasdf/capy/core"
 	"github.com/nasdf/capy/graphql"
 	"github.com/nasdf/capy/link"
 	"github.com/nasdf/capy/storage"
@@ -46,7 +47,7 @@ func main() {
 }
 
 // handler returns an http.handler that can serve GraphQL requests.
-func handler(db *capy.DB) http.Handler {
+func handler(db *core.Store) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var params graphql.QueryParams
 		var err error
@@ -68,7 +69,7 @@ func handler(db *capy.DB) http.Handler {
 			http.Error(w, fmt.Sprintf("failed to parse request: %v", err), http.StatusBadRequest)
 			return
 		}
-		res, err := db.Execute(r.Context(), params)
+		res, err := capy.Execute(r.Context(), db, params)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

@@ -19,21 +19,21 @@ const (
 	appendPatch = "append"
 )
 
-// Transaction is used to create, read, update, and delete documents.
-type Transaction struct {
+// Collections contains all documents in the store.
+type Collections struct {
 	links    *link.Store
 	schema   *ast.Schema
 	rootLink datamodel.Link
 	rootNode datamodel.Node
 }
 
-// Transaction creates a new transaction using the given store, schema, and root link.
-func (s *Store) Transaction(ctx context.Context) (*Transaction, error) {
+// Collections returns a collections root that can be used to create, read, update, and delete documents.
+func (s *Store) Collections(ctx context.Context) (*Collections, error) {
 	rootNode, err := s.links.Load(ctx, s.rootLink, basicnode.Prototype.Map)
 	if err != nil {
 		return nil, err
 	}
-	return &Transaction{
+	return &Collections{
 		links:    s.links,
 		schema:   s.schema,
 		rootLink: s.rootLink,
@@ -41,55 +41,45 @@ func (s *Store) Transaction(ctx context.Context) (*Transaction, error) {
 	}, nil
 }
 
-// Schema returns the schema that describes the collections in this transaction.
-func (t *Transaction) Schema() *ast.Schema {
-	return t.schema
-}
-
-// Commit creates a new root node containing the mutations that were applied during the lifetime of this transaction.
-func (t *Transaction) Commit(ctx context.Context) (datamodel.Link, error) {
-	parentsNode, err := BuildRootParentsNode(t.rootLink)
+// Commit creates a new root node containing the collections.
+func (c *Collections) Commit(ctx context.Context) (datamodel.Link, error) {
+	parentsNode, err := BuildRootParentsNode(c.rootLink)
 	if err != nil {
 		return nil, err
 	}
 	rootPath := datamodel.ParsePath(RootParentsFieldName)
-	rootNode, err := t.links.SetNode(ctx, rootPath, t.rootNode, parentsNode)
+	rootNode, err := c.links.SetNode(ctx, rootPath, c.rootNode, parentsNode)
 	if err != nil {
 		return nil, err
 	}
-	return t.links.Store(ctx, rootNode)
-}
-
-// DocumentIterator returns a new iterator that can be used to iterate through all documents in a collection.
-func (t *Transaction) DocumentIterator(ctx context.Context, collection string) (*DocumentIterator, error) {
-	return NewDocumentIterator(ctx, t.links, collection, t.rootNode)
+	return c.links.Store(ctx, rootNode)
 }
 
 // ReadDocument returns the document in the given collection with the given id.
-func (t *Transaction) ReadDocument(ctx context.Context, collection, id string) (datamodel.Node, error) {
-	return t.links.GetNode(ctx, DocumentPath(collection, id), t.rootNode)
+func (c *Collections) ReadDocument(ctx context.Context, collection, id string) (datamodel.Node, error) {
+	return c.links.GetNode(ctx, DocumentPath(collection, id), c.rootNode)
 }
 
 // DeleteDocument deletes the document in the given collection with the given id.
-func (t *Transaction) DeleteDocument(ctx context.Context, collection, id string) error {
+func (c *Collections) DeleteDocument(ctx context.Context, collection, id string) error {
 	rootPath := DocumentPath(collection, id)
-	rootNode, err := t.links.SetNode(ctx, rootPath, t.rootNode, nil)
+	rootNode, err := c.links.SetNode(ctx, rootPath, c.rootNode, nil)
 	if err != nil {
 		return err
 	}
-	t.rootNode = rootNode
+	c.rootNode = rootNode
 	return nil
 }
 
 // CreateDocument creates a document in the given collection using the given value and returns its unique id.
-func (t *Transaction) CreateDocument(ctx context.Context, collection string, value map[string]any) (string, error) {
+func (c *Collections) CreateDocument(ctx context.Context, collection string, value map[string]any) (string, error) {
 	nb := basicnode.Prototype.Map.NewBuilder()
 
-	def, ok := t.schema.Types[collection]
+	def, ok := c.schema.Types[collection]
 	if !ok {
 		return "", fmt.Errorf("invalid document type %s", collection)
 	}
-	err := t.assignObject(ctx, def, value, nb)
+	err := c.assignObject(ctx, def, value, nb)
 	if err != nil {
 		return "", err
 	}
@@ -97,49 +87,48 @@ func (t *Transaction) CreateDocument(ctx context.Context, collection string, val
 	if err != nil {
 		return "", err
 	}
-	lnk, err := t.links.Store(ctx, nb.Build())
+	lnk, err := c.links.Store(ctx, nb.Build())
 	if err != nil {
 		return "", err
 	}
 	rootPath := DocumentPath(collection, id.String())
-	rootNode, err := t.links.SetNode(ctx, rootPath, t.rootNode, basicnode.NewLink(lnk))
+	rootNode, err := c.links.SetNode(ctx, rootPath, c.rootNode, basicnode.NewLink(lnk))
 	if err != nil {
 		return "", err
 	}
-	t.rootNode = rootNode
+	c.rootNode = rootNode
 	return id.String(), nil
 }
 
 // PatchDocument patches the document in the given collection with the given id by applying the operations in the given value.
-func (t *Transaction) PatchDocument(ctx context.Context, collection, id string, value map[string]any) error {
+func (c *Collections) PatchDocument(ctx context.Context, collection, id string, value map[string]any) error {
 	nb := basicnode.Prototype.Map.NewBuilder()
-
-	n, err := t.ReadDocument(ctx, collection, id)
+	n, err := c.ReadDocument(ctx, collection, id)
 	if err != nil {
 		return err
 	}
-	def, ok := t.schema.Types[collection]
+	def, ok := c.schema.Types[collection]
 	if !ok {
 		return fmt.Errorf("invalid document type %s", collection)
 	}
-	err = t.patchObject(ctx, def, n, value, nb)
+	err = c.patchObject(ctx, def, n, value, nb)
 	if err != nil {
 		return err
 	}
-	lnk, err := t.links.Store(ctx, nb.Build())
+	lnk, err := c.links.Store(ctx, nb.Build())
 	if err != nil {
 		return err
 	}
 	rootPath := DocumentPath(collection, id)
-	rootNode, err := t.links.SetNode(ctx, rootPath, t.rootNode, basicnode.NewLink(lnk))
+	rootNode, err := c.links.SetNode(ctx, rootPath, c.rootNode, basicnode.NewLink(lnk))
 	if err != nil {
 		return err
 	}
-	t.rootNode = rootNode
+	c.rootNode = rootNode
 	return nil
 }
 
-func (t *Transaction) assignObject(ctx context.Context, def *ast.Definition, value map[string]any, na datamodel.NodeAssembler) error {
+func (c *Collections) assignObject(ctx context.Context, def *ast.Definition, value map[string]any, na datamodel.NodeAssembler) error {
 	ma, err := na.BeginMap(int64(len(value)))
 	if err != nil {
 		return err
@@ -153,7 +142,7 @@ func (t *Transaction) assignObject(ctx context.Context, def *ast.Definition, val
 		if err != nil {
 			return err
 		}
-		err = t.assignValue(ctx, field.Type, v, na)
+		err = c.assignValue(ctx, field.Type, v, na)
 		if err != nil {
 			return err
 		}
@@ -161,16 +150,16 @@ func (t *Transaction) assignObject(ctx context.Context, def *ast.Definition, val
 	return ma.Finish()
 }
 
-func (t *Transaction) assignValue(ctx context.Context, typ *ast.Type, value any, na datamodel.NodeAssembler) error {
+func (c *Collections) assignValue(ctx context.Context, typ *ast.Type, value any, na datamodel.NodeAssembler) error {
 	if !typ.NonNull && value == nil {
 		return na.AssignNull()
 	}
 	if typ.Elem != nil {
-		return t.assignList(ctx, typ.Elem, value.([]any), na)
+		return c.assignList(ctx, typ.Elem, value.([]any), na)
 	}
-	def := t.schema.Types[typ.NamedType]
+	def := c.schema.Types[typ.NamedType]
 	if def.Kind == ast.Object {
-		return t.assignRelation(ctx, typ, value.(map[string]any), na)
+		return c.assignRelation(ctx, typ, value.(map[string]any), na)
 	}
 	switch typ.NamedType {
 	case "String":
@@ -186,13 +175,13 @@ func (t *Transaction) assignValue(ctx context.Context, typ *ast.Type, value any,
 	}
 }
 
-func (t *Transaction) assignList(ctx context.Context, typ *ast.Type, value []any, na datamodel.NodeAssembler) error {
+func (c *Collections) assignList(ctx context.Context, typ *ast.Type, value []any, na datamodel.NodeAssembler) error {
 	la, err := na.BeginList(int64(len(value)))
 	if err != nil {
 		return err
 	}
 	for _, v := range value {
-		err = t.assignValue(ctx, typ, v, la.AssembleValue())
+		err = c.assignValue(ctx, typ, v, la.AssembleValue())
 		if err != nil {
 			return err
 		}
@@ -200,19 +189,19 @@ func (t *Transaction) assignList(ctx context.Context, typ *ast.Type, value []any
 	return la.Finish()
 }
 
-func (t *Transaction) assignRelation(ctx context.Context, typ *ast.Type, value map[string]any, na datamodel.NodeAssembler) error {
+func (c *Collections) assignRelation(ctx context.Context, typ *ast.Type, value map[string]any, na datamodel.NodeAssembler) error {
 	id, ok := value["_id"].(string)
 	if ok {
 		return na.AssignString(id)
 	}
-	id, err := t.CreateDocument(ctx, typ.NamedType, value)
+	id, err := c.CreateDocument(ctx, typ.NamedType, value)
 	if err != nil {
 		return err
 	}
 	return na.AssignString(id)
 }
 
-func (t *Transaction) patchObject(ctx context.Context, def *ast.Definition, n datamodel.Node, value map[string]any, na datamodel.NodeAssembler) error {
+func (c *Collections) patchObject(ctx context.Context, def *ast.Definition, n datamodel.Node, value map[string]any, na datamodel.NodeAssembler) error {
 	ma, err := na.BeginMap(n.Length())
 	if err != nil {
 		return err
@@ -234,7 +223,7 @@ func (t *Transaction) patchObject(ctx context.Context, def *ast.Definition, n da
 			return err
 		}
 		if ok {
-			err = t.patchValue(ctx, field.Type, nv, patch, na)
+			err = c.patchValue(ctx, field.Type, nv, patch, na)
 		} else {
 			err = na.AssignNode(nv)
 		}
@@ -245,10 +234,10 @@ func (t *Transaction) patchObject(ctx context.Context, def *ast.Definition, n da
 	return ma.Finish()
 }
 
-func (t *Transaction) patchValue(ctx context.Context, typ *ast.Type, n datamodel.Node, value any, na datamodel.NodeAssembler) error {
-	def, ok := t.schema.Types[typ.NamedType]
+func (c *Collections) patchValue(ctx context.Context, typ *ast.Type, n datamodel.Node, value any, na datamodel.NodeAssembler) error {
+	def, ok := c.schema.Types[typ.NamedType]
 	if ok && def.Kind == ast.Object {
-		return t.patchRelation(ctx, typ, n, value.(map[string]any), na)
+		return c.patchRelation(ctx, typ, n, value.(map[string]any), na)
 	}
 	patch := value.(map[string]any)
 	if len(patch) != 1 {
@@ -260,15 +249,15 @@ func (t *Transaction) patchValue(ctx context.Context, typ *ast.Type, n datamodel
 	}
 	switch op {
 	case setPatch:
-		return t.assignValue(ctx, typ, patch[op], na)
+		return c.assignValue(ctx, typ, patch[op], na)
 	case appendPatch:
-		return t.appendList(ctx, typ, n, patch[op], na)
+		return c.appendList(ctx, typ, n, patch[op], na)
 	default:
 		return fmt.Errorf("invalid patch operation %s", op)
 	}
 }
 
-func (t *Transaction) patchRelation(ctx context.Context, typ *ast.Type, n datamodel.Node, value map[string]any, na datamodel.NodeAssembler) error {
+func (c *Collections) patchRelation(ctx context.Context, typ *ast.Type, n datamodel.Node, value map[string]any, na datamodel.NodeAssembler) error {
 	if n == nil {
 		return na.AssignNull()
 	}
@@ -276,20 +265,20 @@ func (t *Transaction) patchRelation(ctx context.Context, typ *ast.Type, n datamo
 	if err != nil {
 		return err
 	}
-	err = t.PatchDocument(ctx, typ.NamedType, id, value)
+	err = c.PatchDocument(ctx, typ.NamedType, id, value)
 	if err != nil {
 		return err
 	}
 	return na.AssignString(id)
 }
 
-func (t *Transaction) appendList(ctx context.Context, typ *ast.Type, n datamodel.Node, value any, na datamodel.NodeAssembler) error {
+func (c *Collections) appendList(ctx context.Context, typ *ast.Type, n datamodel.Node, value any, na datamodel.NodeAssembler) error {
 	vals, ok := value.([]any)
 	if !ok {
 		vals = append(vals, value)
 	}
 	if n == nil {
-		return t.assignList(ctx, typ.Elem, vals, na)
+		return c.assignList(ctx, typ.Elem, vals, na)
 	}
 	la, err := na.BeginList(n.Length() + int64(len(vals)))
 	if err != nil {
@@ -307,7 +296,7 @@ func (t *Transaction) appendList(ctx context.Context, typ *ast.Type, n datamodel
 		}
 	}
 	for _, v := range vals {
-		err = t.assignValue(ctx, typ.Elem, v, la.AssembleValue())
+		err = c.assignValue(ctx, typ.Elem, v, la.AssembleValue())
 		if err != nil {
 			return err
 		}

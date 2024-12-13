@@ -38,13 +38,13 @@ func (tc TestCase) Run(t *testing.T) {
 	require.NoError(t, err, "failed to create db")
 
 	for _, op := range tc.Operations {
-		docs, err := db.Store().Dump(ctx)
+		docs, err := db.Dump(ctx)
 		require.NoError(t, err, "failed to load documents")
 
 		query, err := op.QueryTemplate(ctx, docs)
 		require.NoError(t, err, "failed to execute query template")
 
-		node, err := db.Execute(ctx, graphql.QueryParams{Query: query})
+		node, err := capy.Execute(ctx, db, graphql.QueryParams{Query: query})
 		require.NoError(t, err, "failed to execute query")
 
 		var actual bytes.Buffer

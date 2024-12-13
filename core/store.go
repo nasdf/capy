@@ -45,6 +45,11 @@ func NewStore(ctx context.Context, links *link.Store, rootLink datamodel.Link) (
 	}, nil
 }
 
+// Schema returns the schema for this store.
+func (s *Store) Schema() *ast.Schema {
+	return s.schema
+}
+
 func (s *Store) RootLink() datamodel.Link {
 	return s.rootLink
 }
