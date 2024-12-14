@@ -54,7 +54,7 @@ func NewContext(ctx context.Context, store *core.Store, params QueryParams) (*Co
 	var branch *core.Branch
 	switch rev := operation.Directives.ForName("revision"); rev {
 	case nil:
-		b, err := store.Branch(ctx, store.RootLink())
+		b, err := store.Branch(ctx, store.Head())
 		if err != nil {
 			return nil, gqlerror.List{gqlerror.Wrap(err)}
 		}

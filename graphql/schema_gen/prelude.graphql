@@ -334,7 +334,7 @@ directive @revision(
     Link of the revision to execute the operation on.
     """
     link: String!
-) on QUERY | MUTATION | SUBSCRIPTION
+) on QUERY | MUTATION
 
 """
 Commit is a snapshot of the database at a specific changeset.
@@ -350,5 +350,5 @@ type Query {
     """
     Recursively returns the parent commits starting with the revision this query is based on.
     """
-    commits(limit: Int): [Commit!]!    
+    commits: [Commit!]!    
 }

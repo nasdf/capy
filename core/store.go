@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/nasdf/capy/graphql/schema_gen"
 	"github.com/nasdf/capy/link"
@@ -16,6 +17,7 @@ type Store struct {
 	links    *link.Store
 	schema   *ast.Schema
 	rootLink datamodel.Link
+	rootLock sync.RWMutex
 	resolver MergeConflictResolver
 }
 
@@ -50,11 +52,19 @@ func (s *Store) Schema() *ast.Schema {
 	return s.schema
 }
 
-func (s *Store) RootLink() datamodel.Link {
+// Head returns the link of the head commit.
+func (s *Store) Head() datamodel.Link {
+	s.rootLock.RLock()
+	defer s.rootLock.RUnlock()
+
 	return s.rootLink
 }
 
+// Merge attempts to merge the commit from the given link into the current head.
 func (s *Store) Merge(ctx context.Context, rootLink datamodel.Link) error {
+	s.rootLock.Lock()
+	defer s.rootLock.Unlock()
+
 	bases, err := s.MergeBase(ctx, s.rootLink, rootLink)
 	if err != nil {
 		return err

@@ -46,7 +46,7 @@ func main() {
 	}
 	defer file.Close()
 
-	err = links.Export(ctx, db.RootLink(), file)
+	err = links.Export(ctx, db.Head(), file)
 	if err != nil {
 		panic(err)
 	}
