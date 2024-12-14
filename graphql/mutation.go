@@ -72,11 +72,12 @@ func (e *Context) updateMutation(ctx context.Context, field graphql.CollectedFie
 
 	var ids []string
 	for !iter.Done() {
-		id, doc, err := iter.Next(ctx)
+		id, lnk, doc, err := iter.Next(ctx)
 		if err != nil {
 			return err
 		}
 		ctx = context.WithValue(ctx, idContextKey, id)
+		ctx = context.WithValue(ctx, linkContextKey, lnk.String())
 		match, err := e.filterDocument(ctx, collection, doc, filter)
 		if err != nil || !match {
 			return err
@@ -118,11 +119,12 @@ func (e *Context) deleteMutation(ctx context.Context, field graphql.CollectedFie
 		return err
 	}
 	for !iter.Done() {
-		id, doc, err := iter.Next(ctx)
+		id, lnk, doc, err := iter.Next(ctx)
 		if err != nil {
 			return err
 		}
 		ctx = context.WithValue(ctx, idContextKey, id)
+		ctx = context.WithValue(ctx, linkContextKey, lnk.String())
 		match, err := e.filterDocument(ctx, collection, doc, filter)
 		if err != nil || !match {
 			return err

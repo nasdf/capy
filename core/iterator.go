@@ -34,24 +34,24 @@ func (i *DocumentIterator) Done() bool {
 }
 
 // Next returns the next document id and document node from the iterator.
-func (i *DocumentIterator) Next(ctx context.Context) (string, datamodel.Node, error) {
+func (i *DocumentIterator) Next(ctx context.Context) (string, datamodel.Link, datamodel.Node, error) {
 	k, v, err := i.it.Next()
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 	id, err := k.AsString()
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 	lnk, err := v.AsLink()
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 	doc, err := i.links.Load(ctx, lnk, basicnode.Prototype.Map)
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
-	return id, doc, nil
+	return id, lnk, doc, nil
 }
 
 // ParentIterator iterates over all parents of a root node.

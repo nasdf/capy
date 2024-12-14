@@ -6,7 +6,11 @@ extend type {{$name}} {
     """
     The unique identifier of this document.
     """
-    _id: ID!
+    id: ID!
+    """
+    The content address of this document.
+    """
+    link: String!
 }
 
 """
@@ -73,7 +77,7 @@ input {{$name}}PatchInput {
     """
     This field can be used to create relationships with existing {{$name}} documents.
     """
-    _id: IDPatchInput
+    id: IDPatchInput
 {{- range $field := .Fields}}
     {{- if $field.Type.Elem}}
     {{$field.Name}}: {{$field.Type.Elem.Name}}ListPatchInput
@@ -90,7 +94,7 @@ input {{$name}}CreateInput {
     """
     This field can be used to create relationships with existing {{$name}} documents.
     """
-    _id: ID
+    id: ID
 {{- range $field := .Fields}}
     {{$def := index $.Types $field.Type.Name}}
     {{- if $def.IsLeafType}}

@@ -200,7 +200,7 @@ func (c *Branch) assignList(ctx context.Context, typ *ast.Type, value []any, na 
 }
 
 func (c *Branch) assignRelation(ctx context.Context, typ *ast.Type, value map[string]any, na datamodel.NodeAssembler) error {
-	id, ok := value["_id"].(string)
+	id, ok := value["id"].(string)
 	if ok {
 		return na.AssignString(id)
 	}
@@ -217,7 +217,7 @@ func (c *Branch) patchObject(ctx context.Context, def *ast.Definition, n datamod
 		return err
 	}
 	for _, field := range def.Fields {
-		if field.Name == "_link" || field.Name == "_id" {
+		if field.Name == "link" || field.Name == "id" {
 			continue // ignore system fields
 		}
 		nv, err := n.LookupByString(field.Name)

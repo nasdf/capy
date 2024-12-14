@@ -11,6 +11,12 @@ import (
 	"github.com/vektah/gqlparser/v2/gqlerror"
 )
 
+const (
+	idFieldName      = "id"
+	linkFieldName    = "link"
+	commitsFieldName = "commits"
+)
+
 func (e *Context) executeQuery(ctx context.Context, set ast.SelectionSet, na datamodel.NodeAssembler) error {
 	fields := e.collectFields(set, "Query")
 	ma, err := na.BeginMap(int64(len(fields)))
@@ -41,7 +47,7 @@ func (e *Context) executeQuery(ctx context.Context, set ast.SelectionSet, na dat
 				return err
 			}
 
-		case field.Name == "commits":
+		case field.Name == commitsFieldName:
 			err = e.commitsQuery(ctx, field, va)
 			if err != nil {
 				return err
@@ -74,7 +80,7 @@ func (e *Context) commitsQuery(ctx context.Context, field graphql.CollectedField
 	if err != nil {
 		return err
 	}
-	fields := e.collectFields(field.SelectionSet, "commits")
+	fields := e.collectFields(field.SelectionSet, commitsFieldName)
 	iter := e.branch.ParentIterator()
 	for !iter.Done() {
 		l, _, err := iter.Next(ctx)
@@ -87,7 +93,7 @@ func (e *Context) commitsQuery(ctx context.Context, field graphql.CollectedField
 		}
 		for _, f := range fields {
 			switch f.Name {
-			case "link":
+			case linkFieldName:
 				ea, err := ma.AssembleEntry(f.Alias)
 				if err != nil {
 					return err
@@ -128,11 +134,12 @@ func (e *Context) listQuery(ctx context.Context, field graphql.CollectedField, c
 	}
 	args := field.ArgumentMap(e.params.Variables)
 	for !iter.Done() {
-		id, doc, err := iter.Next(ctx)
+		id, lnk, doc, err := iter.Next(ctx)
 		if err != nil {
 			return err
 		}
 		ctx = context.WithValue(ctx, idContextKey, id)
+		ctx = context.WithValue(ctx, linkContextKey, lnk.String())
 		match, err := e.filterDocument(ctx, collection, doc, args["filter"])
 		if err != nil || !match {
 			return err
@@ -163,7 +170,13 @@ func (e *Context) queryDocument(ctx context.Context, collection string, n datamo
 				return err
 			}
 
-		case "_id":
+		case linkFieldName:
+			err = va.AssignString(ctx.Value(linkContextKey).(string))
+			if err != nil {
+				return err
+			}
+
+		case idFieldName:
 			err = va.AssignString(ctx.Value(idContextKey).(string))
 			if err != nil {
 				return err
