@@ -69,7 +69,7 @@ func handler(db *core.Store) http.Handler {
 			http.Error(w, fmt.Sprintf("failed to parse request: %v", err), http.StatusBadRequest)
 			return
 		}
-		res, err := capy.Execute(r.Context(), db, params)
+		res, err := graphql.Execute(r.Context(), db, params)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

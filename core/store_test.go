@@ -26,10 +26,10 @@ func TestMergeBaseSimple(t *testing.T) {
 	store, err := NewStore(ctx, links, rootLink)
 	require.NoError(t, err)
 
-	txA, err := store.Collections(ctx)
+	txA, err := store.Branch(ctx, store.RootLink())
 	require.NoError(t, err)
 
-	txB, err := store.Collections(ctx)
+	txB, err := store.Branch(ctx, store.RootLink())
 	require.NoError(t, err)
 
 	_, err = txA.CreateDocument(ctx, "User", map[string]any{"name": "Bob"})
@@ -65,13 +65,13 @@ func TestMergeBaseFastForward(t *testing.T) {
 	store, err := NewStore(ctx, links, rootLink)
 	require.NoError(t, err)
 
-	txA, err := store.Collections(ctx)
+	txA, err := store.Branch(ctx, store.RootLink())
 	require.NoError(t, err)
 
 	linkA, err := txA.Commit(ctx)
 	require.NoError(t, err)
 
-	txB, err := store.Collections(ctx)
+	txB, err := store.Branch(ctx, store.RootLink())
 	require.NoError(t, err)
 
 	linkB, err := txB.Commit(ctx)
@@ -100,7 +100,7 @@ func TestIndependentsSimple(t *testing.T) {
 
 	commits := make([]datamodel.Link, 5)
 	for i := 0; i < len(commits); i++ {
-		tx, err := store.Collections(ctx)
+		tx, err := store.Branch(ctx, store.RootLink())
 		require.NoError(t, err)
 
 		rootLink, err = tx.Commit(ctx)

@@ -30,7 +30,7 @@ func main() {
 		panic(err)
 	}
 
-	res, err := capy.Execute(ctx, db, graphql.QueryParams{Query: mutation})
+	res, err := graphql.Execute(ctx, db, graphql.QueryParams{Query: mutation})
 	if err != nil {
 		panic(err)
 	}

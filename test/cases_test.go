@@ -44,7 +44,7 @@ func (tc TestCase) Run(t *testing.T) {
 		query, err := op.QueryTemplate(ctx, docs)
 		require.NoError(t, err, "failed to execute query template")
 
-		node, err := capy.Execute(ctx, db, graphql.QueryParams{Query: query})
+		node, err := graphql.Execute(ctx, db, graphql.QueryParams{Query: query})
 		require.NoError(t, err, "failed to execute query")
 
 		var actual bytes.Buffer

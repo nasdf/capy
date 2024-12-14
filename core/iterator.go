@@ -16,14 +16,14 @@ type DocumentIterator struct {
 }
 
 // NewDocumentIterator returns a new iterator that can be used to iterate through all documents in a collection.
-func (c *Collections) DocumentIterator(ctx context.Context, collection string) (*DocumentIterator, error) {
+func (c *Branch) DocumentIterator(ctx context.Context, collection string) (*DocumentIterator, error) {
 	documentsPath := DocumentsPath(collection)
-	documentsNode, err := c.links.GetNode(ctx, documentsPath, c.rootNode)
+	documentsNode, err := c.store.links.GetNode(ctx, documentsPath, c.rootNode)
 	if err != nil {
 		return nil, err
 	}
 	return &DocumentIterator{
-		links: c.links,
+		links: c.store.links,
 		it:    documentsNode.MapIterator(),
 	}, nil
 }
@@ -62,7 +62,12 @@ type ParentIterator struct {
 	prev  int
 }
 
-// ParentIterator returns a new iterator that can be used to iterate through all parents of a root node.
+// ParentIterator returns a new iterator that can be used to iterate through all parents of a branch.
+func (b *Branch) ParentIterator() *ParentIterator {
+	return b.store.ParentIterator(b.rootLink)
+}
+
+// ParentIterator returns a new iterator that can be used to iterate through all parents of a commit.
 func (s *Store) ParentIterator(rootLink datamodel.Link) *ParentIterator {
 	return &ParentIterator{
 		links: s.links,

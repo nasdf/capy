@@ -25,10 +25,10 @@ func TestMergeSimple(t *testing.T) {
 	store, err := NewStore(ctx, links, rootLink)
 	require.NoError(t, err)
 
-	txA, err := store.Collections(ctx)
+	txA, err := store.Branch(ctx, store.RootLink())
 	require.NoError(t, err)
 
-	txB, err := store.Collections(ctx)
+	txB, err := store.Branch(ctx, store.RootLink())
 	require.NoError(t, err)
 
 	_, err = txA.CreateDocument(ctx, "User", map[string]any{"name": "Alice"})
@@ -64,7 +64,7 @@ func TestMergeConflict(t *testing.T) {
 	store, err := NewStore(ctx, links, rootLink)
 	require.NoError(t, err)
 
-	txA, err := store.Collections(ctx)
+	txA, err := store.Branch(ctx, store.RootLink())
 	require.NoError(t, err)
 
 	id, err := txA.CreateDocument(ctx, "User", map[string]any{"name": "Alice"})
@@ -76,7 +76,7 @@ func TestMergeConflict(t *testing.T) {
 	err = store.Merge(ctx, linkA)
 	require.NoError(t, err)
 
-	txB, err := store.Collections(ctx)
+	txB, err := store.Branch(ctx, store.RootLink())
 	require.NoError(t, err)
 
 	err = txB.PatchDocument(ctx, "User", id, map[string]any{"name": map[string]any{"set": "Bob"}})
@@ -85,7 +85,7 @@ func TestMergeConflict(t *testing.T) {
 	linkB, err := txB.Commit(ctx)
 	require.NoError(t, err)
 
-	txC, err := store.Collections(ctx)
+	txC, err := store.Branch(ctx, store.RootLink())
 	require.NoError(t, err)
 
 	err = txC.PatchDocument(ctx, "User", id, map[string]any{"name": map[string]any{"set": "Chad"}})
@@ -100,7 +100,7 @@ func TestMergeConflict(t *testing.T) {
 	err = store.Merge(ctx, linkC)
 	require.NoError(t, err)
 
-	txD, err := store.Collections(ctx)
+	txD, err := store.Branch(ctx, store.RootLink())
 	require.NoError(t, err)
 
 	docNode, err := txD.ReadDocument(ctx, "User", id)

@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/nasdf/capy/link"
-
 	"github.com/google/uuid"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
@@ -19,51 +17,64 @@ const (
 	appendPatch = "append"
 )
 
-// Collections contains all documents in the store.
-type Collections struct {
-	links    *link.Store
-	schema   *ast.Schema
+// Branch is a specific revision of the db that can be read, modified, and merged.
+type Branch struct {
+	store    *Store
 	rootLink datamodel.Link
 	rootNode datamodel.Node
 }
 
-// Collections returns a collections root that can be used to create, read, update, and delete documents.
-func (s *Store) Collections(ctx context.Context) (*Collections, error) {
-	rootNode, err := s.links.Load(ctx, s.rootLink, basicnode.Prototype.Map)
+// Branch creates a new branch from the given link.
+func (s *Store) Branch(ctx context.Context, rootLink datamodel.Link) (*Branch, error) {
+	rootNode, err := s.links.Load(ctx, rootLink, basicnode.Prototype.Map)
 	if err != nil {
 		return nil, err
 	}
-	return &Collections{
-		links:    s.links,
-		schema:   s.schema,
-		rootLink: s.rootLink,
+	return &Branch{
+		store:    s,
+		rootLink: rootLink,
 		rootNode: rootNode,
 	}, nil
 }
 
-// Commit creates a new root node containing the collections.
-func (c *Collections) Commit(ctx context.Context) (datamodel.Link, error) {
+// Commit creates a new commit containing the changes in this branch.
+func (c *Branch) Commit(ctx context.Context) (datamodel.Link, error) {
 	parentsNode, err := BuildRootParentsNode(c.rootLink)
 	if err != nil {
 		return nil, err
 	}
 	rootPath := datamodel.ParsePath(RootParentsFieldName)
-	rootNode, err := c.links.SetNode(ctx, rootPath, c.rootNode, parentsNode)
+	rootNode, err := c.store.links.SetNode(ctx, rootPath, c.rootNode, parentsNode)
 	if err != nil {
 		return nil, err
 	}
-	return c.links.Store(ctx, rootNode)
+	rootLink, err := c.store.links.Store(ctx, rootNode)
+	if err != nil {
+		return nil, err
+	}
+	c.rootLink = rootLink
+	c.rootNode = rootNode
+	return rootLink, nil
+}
+
+// Merge merges this branch into the main branch.
+func (c *Branch) Merge(ctx context.Context) error {
+	rootLink, err := c.Commit(ctx)
+	if err != nil {
+		return err
+	}
+	return c.store.Merge(ctx, rootLink)
 }
 
 // ReadDocument returns the document in the given collection with the given id.
-func (c *Collections) ReadDocument(ctx context.Context, collection, id string) (datamodel.Node, error) {
-	return c.links.GetNode(ctx, DocumentPath(collection, id), c.rootNode)
+func (c *Branch) ReadDocument(ctx context.Context, collection, id string) (datamodel.Node, error) {
+	return c.store.links.GetNode(ctx, DocumentPath(collection, id), c.rootNode)
 }
 
 // DeleteDocument deletes the document in the given collection with the given id.
-func (c *Collections) DeleteDocument(ctx context.Context, collection, id string) error {
+func (c *Branch) DeleteDocument(ctx context.Context, collection, id string) error {
 	rootPath := DocumentPath(collection, id)
-	rootNode, err := c.links.SetNode(ctx, rootPath, c.rootNode, nil)
+	rootNode, err := c.store.links.SetNode(ctx, rootPath, c.rootNode, nil)
 	if err != nil {
 		return err
 	}
@@ -72,10 +83,9 @@ func (c *Collections) DeleteDocument(ctx context.Context, collection, id string)
 }
 
 // CreateDocument creates a document in the given collection using the given value and returns its unique id.
-func (c *Collections) CreateDocument(ctx context.Context, collection string, value map[string]any) (string, error) {
+func (c *Branch) CreateDocument(ctx context.Context, collection string, value map[string]any) (string, error) {
 	nb := basicnode.Prototype.Map.NewBuilder()
-
-	def, ok := c.schema.Types[collection]
+	def, ok := c.store.schema.Types[collection]
 	if !ok {
 		return "", fmt.Errorf("invalid document type %s", collection)
 	}
@@ -87,12 +97,12 @@ func (c *Collections) CreateDocument(ctx context.Context, collection string, val
 	if err != nil {
 		return "", err
 	}
-	lnk, err := c.links.Store(ctx, nb.Build())
+	lnk, err := c.store.links.Store(ctx, nb.Build())
 	if err != nil {
 		return "", err
 	}
 	rootPath := DocumentPath(collection, id.String())
-	rootNode, err := c.links.SetNode(ctx, rootPath, c.rootNode, basicnode.NewLink(lnk))
+	rootNode, err := c.store.links.SetNode(ctx, rootPath, c.rootNode, basicnode.NewLink(lnk))
 	if err != nil {
 		return "", err
 	}
@@ -101,13 +111,13 @@ func (c *Collections) CreateDocument(ctx context.Context, collection string, val
 }
 
 // PatchDocument patches the document in the given collection with the given id by applying the operations in the given value.
-func (c *Collections) PatchDocument(ctx context.Context, collection, id string, value map[string]any) error {
+func (c *Branch) PatchDocument(ctx context.Context, collection, id string, value map[string]any) error {
 	nb := basicnode.Prototype.Map.NewBuilder()
 	n, err := c.ReadDocument(ctx, collection, id)
 	if err != nil {
 		return err
 	}
-	def, ok := c.schema.Types[collection]
+	def, ok := c.store.schema.Types[collection]
 	if !ok {
 		return fmt.Errorf("invalid document type %s", collection)
 	}
@@ -115,12 +125,12 @@ func (c *Collections) PatchDocument(ctx context.Context, collection, id string, 
 	if err != nil {
 		return err
 	}
-	lnk, err := c.links.Store(ctx, nb.Build())
+	lnk, err := c.store.links.Store(ctx, nb.Build())
 	if err != nil {
 		return err
 	}
 	rootPath := DocumentPath(collection, id)
-	rootNode, err := c.links.SetNode(ctx, rootPath, c.rootNode, basicnode.NewLink(lnk))
+	rootNode, err := c.store.links.SetNode(ctx, rootPath, c.rootNode, basicnode.NewLink(lnk))
 	if err != nil {
 		return err
 	}
@@ -128,7 +138,7 @@ func (c *Collections) PatchDocument(ctx context.Context, collection, id string, 
 	return nil
 }
 
-func (c *Collections) assignObject(ctx context.Context, def *ast.Definition, value map[string]any, na datamodel.NodeAssembler) error {
+func (c *Branch) assignObject(ctx context.Context, def *ast.Definition, value map[string]any, na datamodel.NodeAssembler) error {
 	ma, err := na.BeginMap(int64(len(value)))
 	if err != nil {
 		return err
@@ -150,14 +160,14 @@ func (c *Collections) assignObject(ctx context.Context, def *ast.Definition, val
 	return ma.Finish()
 }
 
-func (c *Collections) assignValue(ctx context.Context, typ *ast.Type, value any, na datamodel.NodeAssembler) error {
+func (c *Branch) assignValue(ctx context.Context, typ *ast.Type, value any, na datamodel.NodeAssembler) error {
 	if !typ.NonNull && value == nil {
 		return na.AssignNull()
 	}
 	if typ.Elem != nil {
 		return c.assignList(ctx, typ.Elem, value.([]any), na)
 	}
-	def := c.schema.Types[typ.NamedType]
+	def := c.store.schema.Types[typ.NamedType]
 	if def.Kind == ast.Object {
 		return c.assignRelation(ctx, typ, value.(map[string]any), na)
 	}
@@ -175,7 +185,7 @@ func (c *Collections) assignValue(ctx context.Context, typ *ast.Type, value any,
 	}
 }
 
-func (c *Collections) assignList(ctx context.Context, typ *ast.Type, value []any, na datamodel.NodeAssembler) error {
+func (c *Branch) assignList(ctx context.Context, typ *ast.Type, value []any, na datamodel.NodeAssembler) error {
 	la, err := na.BeginList(int64(len(value)))
 	if err != nil {
 		return err
@@ -189,7 +199,7 @@ func (c *Collections) assignList(ctx context.Context, typ *ast.Type, value []any
 	return la.Finish()
 }
 
-func (c *Collections) assignRelation(ctx context.Context, typ *ast.Type, value map[string]any, na datamodel.NodeAssembler) error {
+func (c *Branch) assignRelation(ctx context.Context, typ *ast.Type, value map[string]any, na datamodel.NodeAssembler) error {
 	id, ok := value["_id"].(string)
 	if ok {
 		return na.AssignString(id)
@@ -201,7 +211,7 @@ func (c *Collections) assignRelation(ctx context.Context, typ *ast.Type, value m
 	return na.AssignString(id)
 }
 
-func (c *Collections) patchObject(ctx context.Context, def *ast.Definition, n datamodel.Node, value map[string]any, na datamodel.NodeAssembler) error {
+func (c *Branch) patchObject(ctx context.Context, def *ast.Definition, n datamodel.Node, value map[string]any, na datamodel.NodeAssembler) error {
 	ma, err := na.BeginMap(n.Length())
 	if err != nil {
 		return err
@@ -234,8 +244,8 @@ func (c *Collections) patchObject(ctx context.Context, def *ast.Definition, n da
 	return ma.Finish()
 }
 
-func (c *Collections) patchValue(ctx context.Context, typ *ast.Type, n datamodel.Node, value any, na datamodel.NodeAssembler) error {
-	def, ok := c.schema.Types[typ.NamedType]
+func (c *Branch) patchValue(ctx context.Context, typ *ast.Type, n datamodel.Node, value any, na datamodel.NodeAssembler) error {
+	def, ok := c.store.schema.Types[typ.NamedType]
 	if ok && def.Kind == ast.Object {
 		return c.patchRelation(ctx, typ, n, value.(map[string]any), na)
 	}
@@ -257,7 +267,7 @@ func (c *Collections) patchValue(ctx context.Context, typ *ast.Type, n datamodel
 	}
 }
 
-func (c *Collections) patchRelation(ctx context.Context, typ *ast.Type, n datamodel.Node, value map[string]any, na datamodel.NodeAssembler) error {
+func (c *Branch) patchRelation(ctx context.Context, typ *ast.Type, n datamodel.Node, value map[string]any, na datamodel.NodeAssembler) error {
 	if n == nil {
 		return na.AssignNull()
 	}
@@ -272,7 +282,7 @@ func (c *Collections) patchRelation(ctx context.Context, typ *ast.Type, n datamo
 	return na.AssignString(id)
 }
 
-func (c *Collections) appendList(ctx context.Context, typ *ast.Type, n datamodel.Node, value any, na datamodel.NodeAssembler) error {
+func (c *Branch) appendList(ctx context.Context, typ *ast.Type, n datamodel.Node, value any, na datamodel.NodeAssembler) error {
 	vals, ok := value.([]any)
 	if !ok {
 		vals = append(vals, value)

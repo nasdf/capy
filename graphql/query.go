@@ -41,6 +41,12 @@ func (e *Context) executeQuery(ctx context.Context, set ast.SelectionSet, na dat
 				return err
 			}
 
+		case field.Name == "commits":
+			err = e.commitsQuery(ctx, field, va)
+			if err != nil {
+				return err
+			}
+
 		case strings.HasPrefix(field.Name, findOperationPrefix):
 			collection := strings.TrimPrefix(field.Name, findOperationPrefix)
 			args := field.ArgumentMap(e.params.Variables)
@@ -63,8 +69,47 @@ func (e *Context) executeQuery(ctx context.Context, set ast.SelectionSet, na dat
 	return ma.Finish()
 }
 
+func (e *Context) commitsQuery(ctx context.Context, field graphql.CollectedField, na datamodel.NodeAssembler) error {
+	la, err := na.BeginList(0)
+	if err != nil {
+		return err
+	}
+	fields := e.collectFields(field.SelectionSet, "commits")
+	iter := e.branch.ParentIterator()
+	for !iter.Done() {
+		l, _, err := iter.Next(ctx)
+		if err != nil {
+			return err
+		}
+		ma, err := la.AssembleValue().BeginMap(1)
+		if err != nil {
+			return err
+		}
+		for _, f := range fields {
+			switch f.Name {
+			case "link":
+				ea, err := ma.AssembleEntry(f.Alias)
+				if err != nil {
+					return err
+				}
+				err = ea.AssignString(l.String())
+				if err != nil {
+					return err
+				}
+			default:
+				return fmt.Errorf("unknown commit field: %s", f.Name)
+			}
+		}
+		err = ma.Finish()
+		if err != nil {
+			return err
+		}
+	}
+	return la.Finish()
+}
+
 func (e *Context) findQuery(ctx context.Context, field graphql.CollectedField, collection string, id string, na datamodel.NodeAssembler) error {
-	doc, err := e.collections.ReadDocument(ctx, collection, id)
+	doc, err := e.branch.ReadDocument(ctx, collection, id)
 	if err != nil {
 		return err
 	}
@@ -77,7 +122,7 @@ func (e *Context) listQuery(ctx context.Context, field graphql.CollectedField, c
 	if err != nil {
 		return err
 	}
-	iter, err := e.collections.DocumentIterator(ctx, collection)
+	iter, err := e.branch.DocumentIterator(ctx, collection)
 	if err != nil {
 		return err
 	}
@@ -169,7 +214,7 @@ func (e *Context) queryRelation(ctx context.Context, typ *ast.Type, n datamodel.
 	if err != nil {
 		return err
 	}
-	doc, err := e.collections.ReadDocument(ctx, typ.NamedType, id)
+	doc, err := e.branch.ReadDocument(ctx, typ.NamedType, id)
 	if err != nil {
 		return err
 	}

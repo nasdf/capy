@@ -22,3 +22,12 @@ var linkPrototype = cidlink.LinkPrototype{Prefix: cid.Prefix{
 var prototypeChooser = func(l datamodel.Link, lc linking.LinkContext) (datamodel.NodePrototype, error) {
 	return basicnode.Prototype.Any, nil
 }
+
+// Parse parses a link from the given string value.
+func Parse(value string) (datamodel.Link, error) {
+	c, err := cid.Decode(value)
+	if err != nil {
+		return nil, err
+	}
+	return cidlink.Link{Cid: c}, nil
+}

@@ -53,7 +53,7 @@ func (e *Context) executeMutation(ctx context.Context, set ast.SelectionSet, na 
 func (e *Context) createMutation(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) error {
 	args := field.ArgumentMap(e.params.Variables)
 	data, _ := args["data"].(map[string]any)
-	id, err := e.collections.CreateDocument(ctx, collection, data)
+	id, err := e.branch.CreateDocument(ctx, collection, data)
 	if err != nil {
 		return err
 	}
@@ -65,7 +65,7 @@ func (e *Context) updateMutation(ctx context.Context, field graphql.CollectedFie
 	filter, _ := args["filter"].(map[string]any)
 	patch, _ := args["patch"].(map[string]any)
 
-	iter, err := e.collections.DocumentIterator(ctx, collection)
+	iter, err := e.branch.DocumentIterator(ctx, collection)
 	if err != nil {
 		return err
 	}
@@ -81,7 +81,7 @@ func (e *Context) updateMutation(ctx context.Context, field graphql.CollectedFie
 		if err != nil || !match {
 			return err
 		}
-		err = e.collections.PatchDocument(ctx, collection, id, patch)
+		err = e.branch.PatchDocument(ctx, collection, id, patch)
 		if err != nil {
 			return err
 		}
@@ -92,7 +92,7 @@ func (e *Context) updateMutation(ctx context.Context, field graphql.CollectedFie
 		return err
 	}
 	for _, id := range ids {
-		doc, err := e.collections.ReadDocument(ctx, collection, id)
+		doc, err := e.branch.ReadDocument(ctx, collection, id)
 		if err != nil {
 			return err
 		}
@@ -113,7 +113,7 @@ func (e *Context) deleteMutation(ctx context.Context, field graphql.CollectedFie
 	if err != nil {
 		return err
 	}
-	iter, err := e.collections.DocumentIterator(ctx, collection)
+	iter, err := e.branch.DocumentIterator(ctx, collection)
 	if err != nil {
 		return err
 	}
@@ -131,7 +131,7 @@ func (e *Context) deleteMutation(ctx context.Context, field graphql.CollectedFie
 		if err != nil {
 			return err
 		}
-		err = e.collections.DeleteDocument(ctx, collection, id)
+		err = e.branch.DeleteDocument(ctx, collection, id)
 		if err != nil {
 			return err
 		}

@@ -19,13 +19,13 @@ type QueryParams struct {
 }
 
 // Execute runs the query and returns a node containing the result of the query operation.
-func Execute(ctx context.Context, collections *core.Collections, schema *ast.Schema, params QueryParams) (datamodel.Node, error) {
+func Execute(ctx context.Context, store *core.Store, params QueryParams) (datamodel.Node, error) {
 	nb := basicnode.Prototype.Any.NewBuilder()
 	ma, err := nb.BeginMap(2)
 	if err != nil {
 		return nil, err
 	}
-	err = assignResults(ctx, collections, schema, params, ma)
+	err = assignResults(ctx, store, params, ma)
 	if err != nil {
 		return nil, err
 	}
@@ -36,8 +36,8 @@ func Execute(ctx context.Context, collections *core.Collections, schema *ast.Sch
 	return nb.Build(), nil
 }
 
-func assignResults(ctx context.Context, collections *core.Collections, schema *ast.Schema, params QueryParams, na datamodel.MapAssembler) error {
-	exe, errs := NewContext(collections, schema, params)
+func assignResults(ctx context.Context, store *core.Store, params QueryParams, na datamodel.MapAssembler) error {
+	exe, errs := NewContext(ctx, store, params)
 	if errs != nil {
 		return assignErrors(errs, na)
 	}

@@ -325,3 +325,30 @@ input BooleanListPatchInput {
     """
     append: [Boolean]
 }
+
+"""
+Directive used to query previous revisions.
+"""
+directive @revision(
+    """
+    Link of the revision to execute the operation on.
+    """
+    link: String!
+) on QUERY | MUTATION | SUBSCRIPTION
+
+"""
+Commit is a snapshot of the database at a specific changeset.
+"""
+type Commit {
+    """
+    Content address of the commit.
+    """
+    link: String!
+}
+
+type Query {
+    """
+    Recursively returns the parent commits starting with the revision this query is based on.
+    """
+    commits(limit: Int): [Commit!]!    
+}

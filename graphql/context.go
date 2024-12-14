@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/nasdf/capy/core"
+	"github.com/nasdf/capy/link"
 
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/ipld/go-ipld-prime/datamodel"
@@ -26,15 +27,15 @@ const (
 )
 
 type Context struct {
-	collections *core.Collections
-	schema      *ast.Schema
-	query       *ast.QueryDocument
-	operation   *ast.OperationDefinition
-	params      QueryParams
+	branch    *core.Branch
+	schema    *ast.Schema
+	query     *ast.QueryDocument
+	operation *ast.OperationDefinition
+	params    QueryParams
 }
 
-func NewContext(collections *core.Collections, schema *ast.Schema, params QueryParams) (*Context, gqlerror.List) {
-	query, errs := gqlparser.LoadQuery(schema, params.Query)
+func NewContext(ctx context.Context, store *core.Store, params QueryParams) (*Context, gqlerror.List) {
+	query, errs := gqlparser.LoadQuery(store.Schema(), params.Query)
 	if errs != nil {
 		return nil, errs
 	}
@@ -47,12 +48,31 @@ func NewContext(collections *core.Collections, schema *ast.Schema, params QueryP
 	if operation == nil {
 		return nil, gqlerror.List{gqlerror.Errorf("operation is not defined")}
 	}
+	var branch *core.Branch
+	switch rev := operation.Directives.ForName("revision"); rev {
+	case nil:
+		b, err := store.Branch(ctx, store.RootLink())
+		if err != nil {
+			return nil, gqlerror.List{gqlerror.Wrap(err)}
+		}
+		branch = b
+	default:
+		l, err := link.Parse(rev.Arguments.ForName("link").Value.Raw)
+		if err != nil {
+			return nil, gqlerror.List{gqlerror.Wrap(err)}
+		}
+		b, err := store.Branch(ctx, l)
+		if err != nil {
+			return nil, gqlerror.List{gqlerror.Wrap(err)}
+		}
+		branch = b
+	}
 	return &Context{
-		collections: collections,
-		schema:      schema,
-		query:       query,
-		params:      params,
-		operation:   operation,
+		schema:    store.Schema(),
+		branch:    branch,
+		query:     query,
+		operation: operation,
+		params:    params,
 	}, nil
 }
 
@@ -61,6 +81,10 @@ func (e *Context) Execute(ctx context.Context) (datamodel.Node, error) {
 	switch e.operation.Operation {
 	case ast.Mutation:
 		err := e.executeMutation(ctx, e.operation.SelectionSet, res)
+		if err != nil {
+			return nil, err
+		}
+		err = e.branch.Merge(ctx)
 		if err != nil {
 			return nil, err
 		}

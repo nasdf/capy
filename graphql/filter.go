@@ -150,7 +150,7 @@ func (e *Context) filterRelation(ctx context.Context, typ *ast.Type, n datamodel
 	if err != nil {
 		return false, err
 	}
-	doc, err := e.collections.ReadDocument(ctx, typ.NamedType, id)
+	doc, err := e.branch.ReadDocument(ctx, typ.NamedType, id)
 	if err != nil {
 		return false, err
 	}
