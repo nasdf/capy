@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/vektah/gqlparser/v2/ast"
 )
 
@@ -27,24 +26,24 @@ const (
 	noneFilter           = "none"
 )
 
-func (e *Context) filterDocument(ctx context.Context, collection string, n datamodel.Node, value any) (bool, error) {
-	if value == nil {
+func (e *Request) filterDocument(ctx context.Context, collection string, doc map[string]any, filter any) (bool, error) {
+	if filter == nil {
 		return true, nil
 	}
-	for key, val := range value.(map[string]any) {
+	for key, val := range filter.(map[string]any) {
 		switch key {
 		case andFilter:
-			match, err := e.filterAnd(ctx, collection, n, val)
+			match, err := e.filterAnd(ctx, collection, doc, val)
 			if err != nil || !match {
 				return false, err
 			}
 		case orFilter:
-			match, err := e.filterOr(ctx, collection, n, val)
+			match, err := e.filterOr(ctx, collection, doc, val)
 			if err != nil || !match {
 				return false, err
 			}
 		case notFilter:
-			match, err := e.filterDocument(ctx, collection, n, val.(map[string]any))
+			match, err := e.filterDocument(ctx, collection, doc, val)
 			if err != nil || match {
 				return false, err
 			}
@@ -57,11 +56,7 @@ func (e *Context) filterDocument(ctx context.Context, collection string, n datam
 			if field == nil {
 				return false, fmt.Errorf("invalid document field %s", key)
 			}
-			fn, err := n.LookupByString(key)
-			if err != nil {
-				return false, err
-			}
-			match, err := e.filterNode(ctx, field.Type, fn, val)
+			match, err := e.filterValue(ctx, field.Type, doc[key], val)
 			if err != nil || !match {
 				return false, err
 			}
@@ -70,68 +65,68 @@ func (e *Context) filterDocument(ctx context.Context, collection string, n datam
 	return true, nil
 }
 
-func (e *Context) filterNode(ctx context.Context, typ *ast.Type, n datamodel.Node, value any) (bool, error) {
-	if value == nil {
+func (e *Request) filterValue(ctx context.Context, typ *ast.Type, value any, filter any) (bool, error) {
+	if filter == nil {
 		return true, nil
 	}
 	def := e.schema.Types[typ.NamedType]
 	if def.Kind == ast.Object {
-		return e.filterRelation(ctx, typ, n, value.(map[string]any))
+		return e.filterRelation(ctx, typ, value, filter.(map[string]any))
 	}
-	for key, val := range value.(map[string]any) {
+	for key, val := range filter.(map[string]any) {
 		switch key {
 		case equalFilter:
-			match, err := filterEqual(n, val)
+			match, err := filterEqual(value, val)
 			if err != nil || !match {
 				return false, err
 			}
 		case notEqualFilter:
-			match, err := filterEqual(n, val)
+			match, err := filterEqual(value, val)
 			if err != nil || match {
 				return false, err
 			}
 		case greaterFilter:
-			match, err := filterCompare(n, val)
+			match, err := filterCompare(value, val)
 			if err != nil || match <= 0 {
 				return false, err
 			}
 		case greaterOrEqualFilter:
-			match, err := filterCompare(n, val)
+			match, err := filterCompare(value, val)
 			if err != nil || match < 0 {
 				return false, err
 			}
 		case lessFilter:
-			match, err := filterCompare(n, val)
+			match, err := filterCompare(value, val)
 			if err != nil || match >= 0 {
 				return false, err
 			}
 		case lessOrEqualFilter:
-			match, err := filterCompare(n, val)
+			match, err := filterCompare(value, val)
 			if err != nil || match > 0 {
 				return false, err
 			}
 		case inFilter:
-			match, err := filterIn(n, val)
+			match, err := filterIn(value, val)
 			if err != nil || !match {
 				return false, err
 			}
 		case notInFilter:
-			match, err := filterIn(n, val)
+			match, err := filterIn(value, val)
 			if err != nil || match {
 				return false, err
 			}
 		case allFilter:
-			match, err := e.filterAll(ctx, typ, n, val)
+			match, err := e.filterAll(ctx, typ, value, val)
 			if err != nil || !match {
 				return false, err
 			}
 		case anyFilter:
-			match, err := e.filterAny(ctx, typ, n, val)
+			match, err := e.filterAny(ctx, typ, value, val)
 			if err != nil || !match {
 				return false, err
 			}
 		case noneFilter:
-			match, err := e.filterAny(ctx, typ, n, val)
+			match, err := e.filterAny(ctx, typ, value, val)
 			if err != nil || match {
 				return false, err
 			}
@@ -142,27 +137,23 @@ func (e *Context) filterNode(ctx context.Context, typ *ast.Type, n datamodel.Nod
 	return true, nil
 }
 
-func (e *Context) filterRelation(ctx context.Context, typ *ast.Type, n datamodel.Node, value any) (bool, error) {
-	if value == nil {
+func (e *Request) filterRelation(ctx context.Context, typ *ast.Type, value any, filter map[string]any) (bool, error) {
+	if filter == nil {
 		return true, nil
 	}
-	id, err := n.AsString()
+	doc, err := e.tx.ReadDocument(ctx, typ.NamedType, value.(string))
 	if err != nil {
 		return false, err
 	}
-	doc, err := e.branch.ReadDocument(ctx, typ.NamedType, id)
-	if err != nil {
-		return false, err
-	}
-	return e.filterDocument(ctx, typ.NamedType, doc, value)
+	return e.filterDocument(ctx, typ.NamedType, doc, filter)
 }
 
-func (e *Context) filterAnd(ctx context.Context, collection string, n datamodel.Node, value any) (bool, error) {
-	if value == nil {
+func (e *Request) filterAnd(ctx context.Context, collection string, value map[string]any, filter any) (bool, error) {
+	if filter == nil {
 		return true, nil
 	}
-	for _, v := range value.([]any) {
-		match, err := e.filterDocument(ctx, collection, n, v.(map[string]any))
+	for _, v := range filter.([]any) {
+		match, err := e.filterDocument(ctx, collection, value, v)
 		if err != nil || !match {
 			return false, err
 		}
@@ -170,12 +161,12 @@ func (e *Context) filterAnd(ctx context.Context, collection string, n datamodel.
 	return true, nil
 }
 
-func (e *Context) filterOr(ctx context.Context, collection string, n datamodel.Node, value any) (bool, error) {
-	if value == nil {
+func (e *Request) filterOr(ctx context.Context, collection string, value map[string]any, filter any) (bool, error) {
+	if filter == nil {
 		return true, nil
 	}
-	for _, v := range value.([]any) {
-		match, err := e.filterDocument(ctx, collection, n, v.(map[string]any))
+	for _, v := range filter.([]any) {
+		match, err := e.filterDocument(ctx, collection, value, v)
 		if err != nil || match {
 			return match, err
 		}
@@ -183,17 +174,12 @@ func (e *Context) filterOr(ctx context.Context, collection string, n datamodel.N
 	return true, nil
 }
 
-func (e *Context) filterAll(ctx context.Context, typ *ast.Type, n datamodel.Node, value any) (bool, error) {
-	if value == nil {
+func (e *Request) filterAll(ctx context.Context, typ *ast.Type, value any, filter any) (bool, error) {
+	if filter == nil {
 		return true, nil
 	}
-	iter := n.ListIterator()
-	for !iter.Done() {
-		_, v, err := iter.Next()
-		if err != nil {
-			return false, err
-		}
-		match, err := e.filterNode(ctx, typ.Elem, v, value)
+	for _, v := range value.([]any) {
+		match, err := e.filterValue(ctx, typ.Elem, v, filter)
 		if err != nil || !match {
 			return false, err
 		}
@@ -201,17 +187,12 @@ func (e *Context) filterAll(ctx context.Context, typ *ast.Type, n datamodel.Node
 	return true, nil
 }
 
-func (e *Context) filterAny(ctx context.Context, typ *ast.Type, n datamodel.Node, value any) (bool, error) {
-	if value == nil {
+func (e *Request) filterAny(ctx context.Context, typ *ast.Type, value any, filter any) (bool, error) {
+	if filter == nil {
 		return true, nil
 	}
-	iter := n.ListIterator()
-	for !iter.Done() {
-		_, v, err := iter.Next()
-		if err != nil {
-			return false, err
-		}
-		match, err := e.filterNode(ctx, typ.Elem, v, value)
+	for _, v := range value.([]any) {
+		match, err := e.filterValue(ctx, typ.Elem, v, filter)
 		if err != nil || match {
 			return match, err
 		}
@@ -219,66 +200,38 @@ func (e *Context) filterAny(ctx context.Context, typ *ast.Type, n datamodel.Node
 	return false, nil
 }
 
-func filterIn(n datamodel.Node, value any) (bool, error) {
-	switch n.Kind() {
-	case datamodel.Kind_Int:
-		v, err := n.AsInt()
-		if err != nil {
-			return false, err
-		}
-		return slices.Contains(value.([]int64), v), nil
-	case datamodel.Kind_Float:
-		v, err := n.AsFloat()
-		if err != nil {
-			return false, err
-		}
-		return slices.Contains(value.([]float64), v), nil
-	case datamodel.Kind_String:
-		v, err := n.AsString()
-		if err != nil {
-			return false, err
-		}
-		return slices.Contains(value.([]string), v), nil
+func filterIn(value any, filter any) (bool, error) {
+	switch v := value.(type) {
+	case int64:
+		return slices.Contains(filter.([]int64), v), nil
+	case float64:
+		return slices.Contains(filter.([]float64), v), nil
+	case string:
+		return slices.Contains(filter.([]string), v), nil
 	default:
-		return false, fmt.Errorf("invalid kind for in filter: %s", n.Kind())
+		return false, fmt.Errorf("invalid kind for in filter")
 	}
 }
 
-func filterCompare(n datamodel.Node, value any) (int, error) {
-	switch n.Kind() {
-	case datamodel.Kind_Int:
-		v, err := n.AsInt()
-		if err != nil {
-			return 0, err
-		}
-		return cmp.Compare(v, value.(int64)), nil
-	case datamodel.Kind_Float:
-		v, err := n.AsFloat()
-		if err != nil {
-			return 0, err
-		}
-		return cmp.Compare(v, value.(float64)), nil
-	case datamodel.Kind_String:
-		v, err := n.AsString()
-		if err != nil {
-			return 0, err
-		}
-		return cmp.Compare(v, value.(string)), nil
+func filterCompare(value any, filter any) (int, error) {
+	switch v := value.(type) {
+	case int64:
+		return cmp.Compare(v, filter.(int64)), nil
+	case float64:
+		return cmp.Compare(v, filter.(float64)), nil
+	case string:
+		return cmp.Compare(v, filter.(string)), nil
 	default:
-		return 0, fmt.Errorf("invalid kind for compare filter: %s", n.Kind())
+		return 0, fmt.Errorf("invalid kind for compare filter")
 	}
 }
 
-func filterEqual(n datamodel.Node, value any) (bool, error) {
-	switch n.Kind() {
-	case datamodel.Kind_Bool:
-		v, err := n.AsBool()
-		if err != nil {
-			return false, err
-		}
-		return v == value, nil
+func filterEqual(value any, filter any) (bool, error) {
+	switch v := value.(type) {
+	case bool:
+		return v == filter, nil
 	default:
-		match, err := filterCompare(n, value)
+		match, err := filterCompare(v, filter)
 		if err != nil {
 			return false, err
 		}

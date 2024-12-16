@@ -2,270 +2,284 @@ package core
 
 import (
 	"context"
-
-	"github.com/nasdf/capy/link"
-
-	"github.com/ipld/go-ipld-prime/datamodel"
-	"github.com/ipld/go-ipld-prime/node/basicnode"
+	"fmt"
 )
 
 // MergeConflictResolver is a callback function that is used to resolver merge conflicts.
-type MergeConflictResolver func(base, ours, theirs datamodel.Node) (datamodel.Node, error)
+type MergeConflictResolver func(ctx context.Context, base, ours, theirs any) (any, error)
 
 // TheirsConflictResolver is a merge strategy that favors the changes labeled as theirs.
-var TheirsConflictResolver MergeConflictResolver = func(base, ours, theirs datamodel.Node) (datamodel.Node, error) {
+var TheirsConflictResolver MergeConflictResolver = func(ctx context.Context, base, ours, theirs any) (any, error) {
 	return theirs, nil
 }
 
 // OursConflictResolver is a merge strategy that favors the changes labeled as ours.
-var OursConflictResolver MergeConflictResolver = func(base, ours, theirs datamodel.Node) (datamodel.Node, error) {
+var OursConflictResolver MergeConflictResolver = func(ctx context.Context, base, ours, theirs any) (any, error) {
 	return ours, nil
 }
 
-func (s *Store) mergeRoot(ctx context.Context, base, ours, theirs datamodel.Link) (datamodel.Link, error) {
-	baseNode, err := s.links.Load(ctx, base, basicnode.Prototype.Map)
-	if err != nil {
-		return nil, err
-	}
-	ourNode, err := s.links.Load(ctx, ours, basicnode.Prototype.Map)
-	if err != nil {
-		return nil, err
-	}
-	theirNode, err := s.links.Load(ctx, theirs, basicnode.Prototype.Map)
-	if err != nil {
-		return nil, err
-	}
-
-	baseCols, err := baseNode.LookupByString(RootCollectionsFieldName)
-	if err != nil {
-		return nil, err
-	}
-	ourCols, err := ourNode.LookupByString(RootCollectionsFieldName)
-	if err != nil {
-		return nil, err
-	}
-	theirCols, err := theirNode.LookupByString(RootCollectionsFieldName)
-	if err != nil {
-		return nil, err
-	}
-
-	nb := basicnode.Prototype.Any.NewBuilder()
-	err = s.mergeNode(ctx, baseCols, ourCols, theirCols, nb)
-	if err != nil {
-		return nil, err
-	}
-	schemaNode, err := ourNode.LookupByString(RootSchemaFieldName)
-	if err != nil {
-		return nil, err
-	}
-	schemaLink, err := schemaNode.AsLink()
-	if err != nil {
-		return nil, err
-	}
-	collectionsLink, err := s.links.Store(ctx, nb.Build())
-	if err != nil {
-		return nil, err
-	}
-	parentsNode, err := BuildRootParentsNode(ours, theirs)
-	if err != nil {
-		return nil, err
-	}
-	rootNode, err := BuildRootNode(ctx, schemaLink, collectionsLink, parentsNode)
-	if err != nil {
-		return nil, err
-	}
-	return s.links.Store(ctx, rootNode)
-}
-
-func (s *Store) mergeNode(ctx context.Context, base, ours, theirs datamodel.Node, na datamodel.NodeAssembler) error {
-	oursEqual := datamodel.DeepEqual(base, ours)
-	theirsEqual := datamodel.DeepEqual(base, theirs)
-	if base != nil && base.Kind() == datamodel.Kind_Link && !(oursEqual && theirsEqual) {
-		return s.mergeLink(ctx, base, ours, theirs, na)
-	}
-	if base != nil && base.Kind() == datamodel.Kind_Map && !(oursEqual && theirsEqual) {
-		return s.mergeMap(ctx, base, ours, theirs, na)
-	}
-	switch {
-	case !oursEqual && !theirsEqual:
-		res, err := s.resolver(base, ours, theirs)
-		if err != nil {
-			return err
-		}
-		if res == nil {
-			return na.AssignNull()
-		}
-		return na.AssignNode(res)
-	case !oursEqual:
-		if ours == nil {
-			return na.AssignNull()
-		}
-		return na.AssignNode(ours)
-	case !theirsEqual:
-		if theirs == nil {
-			return na.AssignNull()
-		}
-		return na.AssignNode(theirs)
-	default:
-		if base == nil {
-			return na.AssignNull()
-		}
-		return na.AssignNode(base)
-	}
-}
-
-func (s *Store) mergeMap(ctx context.Context, base, ours, theirs datamodel.Node, na datamodel.NodeAssembler) error {
-	ma, err := na.BeginMap(base.Length())
+// Merge attempts to Merge the commit with the given hash into the current head.
+func (r *Repository) Merge(ctx context.Context, hash Hash) error {
+	bases, err := r.mergeBase(ctx, r.head, hash)
 	if err != nil {
 		return err
+	}
+	if len(bases) == 0 {
+		return fmt.Errorf("no merge base found")
+	}
+	head, err := r.mergeCommits(ctx, bases[0], r.head, hash)
+	if err != nil {
+		return err
+	}
+	r.head = head
+	return nil
+}
+
+// mergeCommits returns the results of a three way merge between the given commit hashes.
+func (r *Repository) mergeCommits(ctx context.Context, baseHash, ourHash, theirHash Hash) (Hash, error) {
+	if theirHash.Equal(baseHash) {
+		return ourHash, nil
+	}
+	if ourHash.Equal(baseHash) {
+		return theirHash, nil
+	}
+	base, err := r.Commit(ctx, baseHash)
+	if err != nil {
+		return nil, err
+	}
+	ours, err := r.Commit(ctx, ourHash)
+	if err != nil {
+		return nil, err
+	}
+	theirs, err := r.Commit(ctx, theirHash)
+	if err != nil {
+		return nil, err
+	}
+	dataRoot, err := r.mergeDataRoots(ctx, base.DataRoot, ours.DataRoot, theirs.DataRoot)
+	if err != nil {
+		return nil, err
+	}
+	commit := &Commit{
+		Parents:  []Hash{ourHash, theirHash},
+		DataRoot: dataRoot,
+	}
+	return r.CreateCommit(ctx, commit)
+}
+
+func (r *Repository) mergeDataRoots(ctx context.Context, baseHash, ourHash, theirHash Hash) (Hash, error) {
+	if theirHash.Equal(baseHash) && ourHash.Equal(baseHash) {
+		return baseHash, nil
+	}
+	if theirHash.Equal(baseHash) {
+		return ourHash, nil
+	}
+	if ourHash.Equal(baseHash) {
+		return theirHash, nil
+	}
+	base, err := r.DataRoot(ctx, baseHash)
+	if err != nil {
+		return nil, err
+	}
+	ours, err := r.DataRoot(ctx, ourHash)
+	if err != nil {
+		return nil, err
+	}
+	theirs, err := r.DataRoot(ctx, theirHash)
+	if err != nil {
+		return nil, err
+	}
+	keys := make(map[string]struct{})
+	for k := range base.Collections {
+		keys[k] = struct{}{}
+	}
+	for k := range ours.Collections {
+		keys[k] = struct{}{}
+	}
+	for k := range theirs.Collections {
+		keys[k] = struct{}{}
+	}
+	collections := make(map[string]Hash)
+	for k := range keys {
+		hash, err := r.mergeCollections(ctx, base.Collections[k], ours.Collections[k], theirs.Collections[k])
+		if err != nil {
+			return nil, err
+		}
+		collections[k] = hash
+	}
+	dataRoot := &DataRoot{
+		Collections: collections,
+	}
+	return r.CreateDataRoot(ctx, dataRoot)
+}
+
+func (r *Repository) mergeCollections(ctx context.Context, baseHash, ourHash, theirHash Hash) (Hash, error) {
+	if theirHash.Equal(baseHash) && ourHash.Equal(baseHash) {
+		return baseHash, nil
+	}
+	if theirHash.Equal(baseHash) {
+		return ourHash, nil
+	}
+	if ourHash.Equal(baseHash) {
+		return theirHash, nil
+	}
+	base, err := r.CollectionRoot(ctx, baseHash)
+	if err != nil {
+		return nil, err
+	}
+	ours, err := r.CollectionRoot(ctx, ourHash)
+	if err != nil {
+		return nil, err
+	}
+	theirs, err := r.CollectionRoot(ctx, theirHash)
+	if err != nil {
+		return nil, err
+	}
+	keys := make(map[string]struct{})
+	for k := range base.Documents {
+		keys[k] = struct{}{}
+	}
+	for k := range ours.Documents {
+		keys[k] = struct{}{}
+	}
+	for k := range theirs.Documents {
+		keys[k] = struct{}{}
+	}
+	documents := make(map[string]Hash)
+	for k := range keys {
+		hash, err := r.mergeDocuments(ctx, base.Documents[k], ours.Documents[k], theirs.Documents[k])
+		if err != nil {
+			return nil, err
+		}
+		documents[k] = hash
+	}
+	collection := &CollectionRoot{
+		Documents: documents,
+	}
+	return r.CreateCollectionRoot(ctx, collection)
+}
+
+func (r *Repository) mergeDocuments(ctx context.Context, baseHash, ourHash, theirHash Hash) (Hash, error) {
+	if theirHash.Equal(baseHash) && ourHash.Equal(baseHash) {
+		return baseHash, nil
+	}
+	if theirHash.Equal(baseHash) {
+		return ourHash, nil
+	}
+	if ourHash.Equal(baseHash) {
+		return theirHash, nil
+	}
+	base, err := r.Document(ctx, baseHash)
+	if err != nil {
+		return nil, err
+	}
+	ours, err := r.Document(ctx, ourHash)
+	if err != nil {
+		return nil, err
+	}
+	theirs, err := r.Document(ctx, theirHash)
+	if err != nil {
+		return nil, err
+	}
+	keys := make(map[string]struct{})
+	for k := range base {
+		keys[k] = struct{}{}
+	}
+	for k := range ours {
+		keys[k] = struct{}{}
+	}
+	for k := range theirs {
+		keys[k] = struct{}{}
+	}
+	document := make(map[string]any)
+	for k := range keys {
+		prop, err := r.mergeProperty(ctx, base[k], ours[k], theirs[k])
+		if err != nil {
+			return nil, err
+		}
+		document[k] = prop
+	}
+	return r.CreateDocument(ctx, document)
+}
+
+func (r *Repository) mergeProperty(ctx context.Context, base, ours, theirs any) (any, error) {
+	if theirs == base && ours == base {
+		return base, nil
+	}
+	if theirs == base {
+		return ours, nil
+	}
+	if ours == base {
+		return theirs, nil
+	}
+	return r.conflict(ctx, base, ours, theirs)
+}
+
+// mergeBase returns the best common ancestor for merging the two given commits.
+func (r *Repository) mergeBase(ctx context.Context, oldHash, newHash Hash) ([]Hash, error) {
+	seen := map[string]struct{}{}
+	iter := r.CommitIterator(newHash)
+	for !iter.Done() {
+		hash, _, err := iter.Next(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if oldHash.Equal(hash) {
+			return []Hash{hash}, nil
+		}
+		seen[hash.String()] = struct{}{}
+	}
+	var bases []Hash
+	iter = r.CommitIterator(oldHash)
+	for !iter.Done() {
+		lnk, _, err := iter.Next(ctx)
+		if err != nil {
+			return nil, err
+		}
+		_, ok := seen[lnk.String()]
+		if !ok {
+			continue
+		}
+		bases = append(bases, lnk)
+		iter.Skip()
+	}
+	return r.independents(ctx, bases)
+}
+
+// independents returns a sub list where each entry is not an ancestor of any other entry.
+func (r *Repository) independents(ctx context.Context, hashes []Hash) ([]Hash, error) {
+	if len(hashes) < 2 {
+		return hashes, nil
+	}
+	keep := make(map[string]Hash)
+	for _, h := range hashes {
+		keep[h.String()] = h
 	}
 	seen := make(map[string]struct{})
-	var iter datamodel.MapIterator
-	if base != nil {
-		iter = base.MapIterator()
-	}
-	for iter != nil && !iter.Done() {
-		k, v, err := iter.Next()
-		if err != nil {
-			return err
-		}
-		prop, err := k.AsString()
-		if err != nil {
-			return err
-		}
-		ea, err := ma.AssembleEntry(prop)
-		if err != nil {
-			return err
-		}
-		ourNode, err := tryLookupByString(ours, prop)
-		if err != nil {
-			return err
-		}
-		theirNode, err := tryLookupByString(theirs, prop)
-		if err != nil {
-			return err
-		}
-		err = s.mergeNode(ctx, v, ourNode, theirNode, ea)
-		if err != nil {
-			return err
-		}
-		seen[prop] = struct{}{}
-	}
-	if ours != nil {
-		iter = ours.MapIterator()
-	}
-	for iter != nil && !iter.Done() {
-		k, v, err := iter.Next()
-		if err != nil {
-			return err
-		}
-		prop, err := k.AsString()
-		if err != nil {
-			return err
-		}
-		_, ok := seen[prop]
-		if ok {
+	for _, h := range hashes {
+		_, ok := keep[h.String()]
+		if !ok {
 			continue
 		}
-		ea, err := ma.AssembleEntry(prop)
-		if err != nil {
-			return err
+		iter := r.CommitIterator(h)
+		for !iter.Done() && len(keep) > 1 {
+			hash, _, err := iter.Next(ctx)
+			if err != nil {
+				return nil, err
+			}
+			_, ok := keep[hash.String()]
+			if ok && !h.Equal(hash) {
+				delete(keep, hash.String())
+			}
+			_, ok = seen[hash.String()]
+			if ok {
+				iter.Skip()
+			}
+			seen[hash.String()] = struct{}{}
 		}
-		baseNode, err := tryLookupByString(base, prop)
-		if err != nil {
-			return err
-		}
-		theirNode, err := tryLookupByString(theirs, prop)
-		if err != nil {
-			return err
-		}
-		err = s.mergeNode(ctx, baseNode, v, theirNode, ea)
-		if err != nil {
-			return err
-		}
-		seen[prop] = struct{}{}
 	}
-	if theirs != nil {
-		iter = theirs.MapIterator()
+	result := make([]Hash, 0, len(keep))
+	for _, h := range keep {
+		result = append(result, h)
 	}
-	for iter != nil && !iter.Done() {
-		k, v, err := iter.Next()
-		if err != nil {
-			return err
-		}
-		prop, err := k.AsString()
-		if err != nil {
-			return err
-		}
-		_, ok := seen[prop]
-		if ok {
-			continue
-		}
-		ea, err := ma.AssembleEntry(prop)
-		if err != nil {
-			return err
-		}
-		ourNode, err := tryLookupByString(ours, prop)
-		if err != nil {
-			return err
-		}
-		baseNode, err := tryLookupByString(base, prop)
-		if err != nil {
-			return err
-		}
-		err = s.mergeNode(ctx, baseNode, ourNode, v, ea)
-		if err != nil {
-			return err
-		}
-		seen[prop] = struct{}{}
-	}
-	return ma.Finish()
-}
-
-func (s *Store) mergeLink(ctx context.Context, base, ours, theirs datamodel.Node, na datamodel.NodeAssembler) error {
-	baseNode, err := tryLoadLink(ctx, s.links, base)
-	if err != nil {
-		return err
-	}
-	ourNode, err := tryLoadLink(ctx, s.links, ours)
-	if err != nil {
-		return err
-	}
-	theirNode, err := tryLoadLink(ctx, s.links, theirs)
-	if err != nil {
-		return err
-	}
-
-	nb := basicnode.Prototype.Any.NewBuilder()
-	err = s.mergeNode(ctx, baseNode, ourNode, theirNode, nb)
-	if err != nil {
-		return err
-	}
-	lnk, err := s.links.Store(ctx, nb.Build())
-	if err != nil {
-		return err
-	}
-	return na.AssignLink(lnk)
-}
-
-func tryLookupByString(node datamodel.Node, prop string) (datamodel.Node, error) {
-	if node == nil {
-		return nil, nil
-	}
-	n, err := node.LookupByString(prop)
-	if _, ok := err.(datamodel.ErrNotExists); !ok && err != nil {
-		return nil, err
-	}
-	return n, nil
-}
-
-func tryLoadLink(ctx context.Context, links *link.Store, node datamodel.Node) (datamodel.Node, error) {
-	if node == nil {
-		return nil, nil
-	}
-	link, err := node.AsLink()
-	if err != nil {
-		return nil, err
-	}
-	return links.Load(ctx, link, basicnode.Prototype.Any)
+	return result, nil
 }

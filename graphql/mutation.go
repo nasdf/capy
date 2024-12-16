@@ -2,141 +2,140 @@ package graphql
 
 import (
 	"context"
+	"slices"
 	"strings"
 
 	"github.com/99designs/gqlgen/graphql"
-	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 )
 
-func (e *Context) executeMutation(ctx context.Context, set ast.SelectionSet, na datamodel.NodeAssembler) error {
+func (e *Request) executeMutation(ctx context.Context, set ast.SelectionSet) (any, error) {
 	fields := e.collectFields(set, "Mutation")
-	ma, err := na.BeginMap(int64(len(fields)))
-	if err != nil {
-		return err
-	}
+	result := make(map[string]any, len(fields))
 	for _, field := range fields {
-		va, err := ma.AssembleEntry(field.Alias)
-		if err != nil {
-			return err
-		}
 		switch {
 		case strings.HasPrefix(field.Name, createOperationPrefix):
 			collection := strings.TrimPrefix(field.Name, createOperationPrefix)
-			err = e.createMutation(ctx, field, collection, va)
+			res, err := e.createMutation(ctx, field, collection)
 			if err != nil {
-				return err
+				return nil, err
 			}
+			result[field.Alias] = res
 
 		case strings.HasPrefix(field.Name, updateOperationPrefix):
 			collection := strings.TrimPrefix(field.Name, updateOperationPrefix)
-			err = e.updateMutation(ctx, field, collection, va)
+			res, err := e.updateMutation(ctx, field, collection)
 			if err != nil {
-				return err
+				return nil, err
 			}
+			result[field.Alias] = res
 
 		case strings.HasPrefix(field.Name, deleteOperationPrefix):
 			collection := strings.TrimPrefix(field.Name, deleteOperationPrefix)
-			err = e.deleteMutation(ctx, field, collection, va)
+			res, err := e.deleteMutation(ctx, field, collection)
 			if err != nil {
-				return err
+				return nil, err
 			}
+			result[field.Alias] = res
 
 		default:
-			return gqlerror.Errorf("unsupported mutation %s", field.Name)
+			return nil, gqlerror.Errorf("unsupported mutation %s", field.Name)
 		}
 	}
-	return ma.Finish()
+	return result, nil
 }
 
-func (e *Context) createMutation(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) error {
+func (e *Request) createMutation(ctx context.Context, field graphql.CollectedField, collection string) (any, error) {
 	args := field.ArgumentMap(e.params.Variables)
 	data, _ := args["data"].(map[string]any)
-	id, err := e.branch.CreateDocument(ctx, collection, data)
+	id, err := e.tx.CreateDocument(ctx, collection, data)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return e.findQuery(ctx, field, collection, id, na)
+	return e.findQuery(ctx, field, collection, id)
 }
 
-func (e *Context) updateMutation(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) error {
+func (e *Request) updateMutation(ctx context.Context, field graphql.CollectedField, collection string) (any, error) {
 	args := field.ArgumentMap(e.params.Variables)
 	filter, _ := args["filter"].(map[string]any)
 	patch, _ := args["patch"].(map[string]any)
 
-	iter, err := e.branch.DocumentIterator(ctx, collection)
+	iter, err := e.tx.DocumentIterator(ctx, collection)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
-	var ids []string
+	updates := make([]string, 0)
 	for !iter.Done() {
-		id, lnk, doc, err := iter.Next(ctx)
+		id, hash, doc, err := iter.Next(ctx)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		ctx = context.WithValue(ctx, idContextKey, id)
-		ctx = context.WithValue(ctx, linkContextKey, lnk.String())
+		ctx = context.WithValue(ctx, hashContextKey, hash.String())
 		match, err := e.filterDocument(ctx, collection, doc, filter)
 		if err != nil || !match {
-			return err
+			return nil, err
 		}
-		err = e.branch.PatchDocument(ctx, collection, id, patch)
+		err = e.tx.PatchDocument(ctx, collection, id, patch)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		ids = append(ids, id)
+		updates = append(updates, id)
 	}
-	la, err := na.BeginList(0)
+	iter, err = e.tx.DocumentIterator(ctx, collection)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	for _, id := range ids {
-		doc, err := e.branch.ReadDocument(ctx, collection, id)
+	result := make([]any, 0, len(updates))
+	for !iter.Done() {
+		id, hash, doc, err := iter.Next(ctx)
 		if err != nil {
-			return err
+			return nil, err
+		}
+		if !slices.Contains(updates, id) {
+			continue
 		}
 		ctx = context.WithValue(ctx, idContextKey, id)
-		err = e.queryDocument(ctx, collection, doc, field, la.AssembleValue())
+		ctx = context.WithValue(ctx, hashContextKey, hash.String())
+		data, err := e.queryDocument(ctx, collection, doc, field)
 		if err != nil {
-			return err
+			return nil, err
 		}
+		result = append(result, data)
 	}
-	return la.Finish()
+	return result, nil
 }
 
-func (e *Context) deleteMutation(ctx context.Context, field graphql.CollectedField, collection string, na datamodel.NodeAssembler) error {
+func (e *Request) deleteMutation(ctx context.Context, field graphql.CollectedField, collection string) (any, error) {
 	args := field.ArgumentMap(e.params.Variables)
 	filter, _ := args["filter"].(map[string]any)
 
-	la, err := na.BeginList(0)
+	iter, err := e.tx.DocumentIterator(ctx, collection)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	iter, err := e.branch.DocumentIterator(ctx, collection)
-	if err != nil {
-		return err
-	}
+	var result []any
 	for !iter.Done() {
-		id, lnk, doc, err := iter.Next(ctx)
+		id, hash, doc, err := iter.Next(ctx)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		ctx = context.WithValue(ctx, idContextKey, id)
-		ctx = context.WithValue(ctx, linkContextKey, lnk.String())
+		ctx = context.WithValue(ctx, hashContextKey, hash.String())
 		match, err := e.filterDocument(ctx, collection, doc, filter)
 		if err != nil || !match {
-			return err
+			return nil, err
 		}
-		err = e.queryDocument(ctx, collection, doc, field, la.AssembleValue())
+		data, err := e.queryDocument(ctx, collection, doc, field)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		err = e.branch.DeleteDocument(ctx, collection, id)
+		err = e.tx.DeleteDocument(ctx, collection, id)
 		if err != nil {
-			return err
+			return nil, err
 		}
+		result = append(result, data)
 	}
-	return la.Finish()
+	return result, nil
 }

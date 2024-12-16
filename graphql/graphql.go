@@ -5,11 +5,16 @@ import (
 
 	"github.com/nasdf/capy/core"
 
-	"github.com/ipld/go-ipld-prime/datamodel"
-	"github.com/ipld/go-ipld-prime/node/basicnode"
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 )
+
+// QueryResponse contains all of the fields for a response.
+type QueryResponse struct {
+	Data       any           `json:"data,omitempty"`
+	Errors     gqlerror.List `json:"errors,omitempty"`
+	Extensions any           `json:"extensions,omitempty"`
+}
 
 // QueryParams contains all of the parameters for a query.
 type QueryParams struct {
@@ -19,163 +24,44 @@ type QueryParams struct {
 }
 
 // Execute runs the query and returns a node containing the result of the query operation.
-func Execute(ctx context.Context, store *core.Store, params QueryParams) (datamodel.Node, error) {
-	nb := basicnode.Prototype.Any.NewBuilder()
-	ma, err := nb.BeginMap(2)
-	if err != nil {
-		return nil, err
-	}
-	err = assignResults(ctx, store, params, ma)
-	if err != nil {
-		return nil, err
-	}
-	err = ma.Finish()
-	if err != nil {
-		return nil, err
-	}
-	return nb.Build(), nil
-}
-
-func assignResults(ctx context.Context, store *core.Store, params QueryParams, na datamodel.MapAssembler) error {
-	exe, errs := NewContext(ctx, store, params)
+func Execute(ctx context.Context, repo *core.Repository, params QueryParams) QueryResponse {
+	exe, errs := NewRequest(ctx, repo, params)
 	if errs != nil {
-		return assignErrors(errs, na)
+		return NewResponse(nil, errs)
 	}
 	data, err := exe.Execute(ctx)
 	if err != nil {
-		return assignErrors(gqlerror.List{gqlerror.WrapIfUnwrapped(err)}, na)
+		return NewResponse(nil, err)
 	}
-	va, err := na.AssembleEntry("data")
+	if exe.operation.Operation != ast.Mutation {
+		return NewResponse(data, nil)
+	}
+	// commit the transaction
+	hash, err := exe.tx.Commit(ctx)
 	if err != nil {
-		return err
+		return NewResponse(nil, err)
 	}
-	return va.AssignNode(data)
+	err = repo.Merge(ctx, hash)
+	if err != nil {
+		return NewResponse(nil, err)
+	}
+	return NewResponse(data, nil)
 }
 
-func assignErrors(list gqlerror.List, na datamodel.MapAssembler) error {
-	if len(list) == 0 {
-		return nil
+// NewResponse returns a new GraphQL compliant response.
+func NewResponse(data any, err error) QueryResponse {
+	response := QueryResponse{
+		Data: data,
 	}
-	va, err := na.AssembleEntry("errors")
-	if err != nil {
-		return err
+	switch t := err.(type) {
+	case nil:
+		response.Errors = nil
+	case gqlerror.List:
+		response.Errors = t
+	case *gqlerror.Error:
+		response.Errors = gqlerror.List{t}
+	default:
+		response.Errors = gqlerror.List{gqlerror.Wrap(err)}
 	}
-	la, err := va.BeginList(int64(len(list)))
-	if err != nil {
-		return err
-	}
-	for _, e := range list {
-		err = assignError(e, la.AssembleValue())
-		if err != nil {
-			return nil
-		}
-	}
-	return la.Finish()
-}
-
-func assignError(e *gqlerror.Error, na datamodel.NodeAssembler) error {
-	ma, err := na.BeginMap(0)
-	if err != nil {
-		return err
-	}
-	err = assignErrorMessage(e.Message, ma)
-	if err != nil {
-		return err
-	}
-	err = assignErrorPath(e.Path, ma)
-	if err != nil {
-		return err
-	}
-	err = assignErrorLocations(e.Locations, ma)
-	if err != nil {
-		return err
-	}
-	return ma.Finish()
-}
-
-func assignErrorLocations(locations []gqlerror.Location, na datamodel.MapAssembler) error {
-	if len(locations) == 0 {
-		return nil
-	}
-	va, err := na.AssembleEntry("locations")
-	if err != nil {
-		return err
-	}
-	la, err := va.BeginList(int64(len(locations)))
-	if err != nil {
-		return err
-	}
-	for _, l := range locations {
-		err = assignErrorLocation(l, la.AssembleValue())
-		if err != nil {
-			return err
-		}
-	}
-	return la.Finish()
-}
-
-func assignErrorLocation(location gqlerror.Location, na datamodel.NodeAssembler) error {
-	ma, err := na.BeginMap(0)
-	if err != nil {
-		return err
-	}
-	if location.Column != 0 {
-		va, err := ma.AssembleEntry("column")
-		if err != nil {
-			return err
-		}
-		err = va.AssignInt(int64(location.Column))
-		if err != nil {
-			return err
-		}
-	}
-	if location.Line != 0 {
-		va, err := ma.AssembleEntry("line")
-		if err != nil {
-			return err
-		}
-		err = va.AssignInt(int64(location.Line))
-		if err != nil {
-			return err
-		}
-	}
-	return ma.Finish()
-}
-
-func assignErrorPath(path ast.Path, na datamodel.MapAssembler) error {
-	if len(path) == 0 {
-		return nil
-	}
-	va, err := na.AssembleEntry("path")
-	if err != nil {
-		return err
-	}
-	la, err := va.BeginList(int64(len(path)))
-	if err != nil {
-		return err
-	}
-	for _, p := range path {
-		switch t := p.(type) {
-		case ast.PathIndex:
-			err = la.AssembleValue().AssignInt(int64(int(t)))
-			if err != nil {
-				return err
-			}
-
-		case ast.PathName:
-			err = la.AssembleValue().AssignString(string(t))
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return la.Finish()
-}
-
-func assignErrorMessage(message string, na datamodel.MapAssembler) error {
-	va, err := na.AssembleEntry("message")
-	if err != nil {
-		return err
-	}
-	return va.AssignString(message)
+	return response
 }

@@ -4,17 +4,16 @@ import (
 	"bytes"
 	"context"
 	"embed"
+	"encoding/json"
 	"io/fs"
 	"path/filepath"
 	"testing"
 	"text/template"
 
 	"github.com/nasdf/capy"
+	"github.com/nasdf/capy/core"
 	"github.com/nasdf/capy/graphql"
-	"github.com/nasdf/capy/link"
-	"github.com/nasdf/capy/storage"
 
-	"github.com/ipld/go-ipld-prime/codec/json"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
@@ -32,9 +31,8 @@ type TestCase struct {
 
 func (tc TestCase) Run(t *testing.T) {
 	ctx := context.Background()
-	links := link.NewStore(storage.NewMemory())
 
-	db, err := capy.Open(ctx, links, tc.Schema)
+	db, err := capy.Init(ctx, core.NewMemoryStorage(), tc.Schema)
 	require.NoError(t, err, "failed to create db")
 
 	for _, op := range tc.Operations {
@@ -44,17 +42,14 @@ func (tc TestCase) Run(t *testing.T) {
 		query, err := op.QueryTemplate(ctx, docs)
 		require.NoError(t, err, "failed to execute query template")
 
-		node, err := graphql.Execute(ctx, db, graphql.QueryParams{Query: query})
-		require.NoError(t, err, "failed to execute query")
-
-		var actual bytes.Buffer
-		err = json.Encode(node, &actual)
+		result := graphql.Execute(ctx, db, graphql.QueryParams{Query: query})
+		actual, err := json.Marshal(result)
 		require.NoError(t, err, "failed to encode results")
 
 		expected, err := op.ResponseTemplate(ctx, docs)
 		require.NoError(t, err, "failed to execute response template")
 
-		assert.JSONEq(t, expected, actual.String())
+		assert.JSONEq(t, expected, string(actual))
 	}
 }
 

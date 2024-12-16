@@ -30,7 +30,7 @@ func Execute(input string) (*ast.Schema, error) {
 	if err := schemaTemplate.Execute(&out, inputSchema); err != nil {
 		return nil, err
 	}
-	preludeSource := ast.Source{Input: preludeSource}
+	preludeSource := ast.Source{Input: preludeSource, BuiltIn: true}
 	outputSource := ast.Source{Input: out.String()}
 	return gqlparser.LoadSchema(&preludeSource, &inputSource, &outputSource)
 }

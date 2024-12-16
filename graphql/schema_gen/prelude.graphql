@@ -331,9 +331,9 @@ Directive used to query previous revisions.
 """
 directive @revision(
     """
-    Link of the revision to execute the operation on.
+    Hash of the revision to execute the operation on.
     """
-    link: String!
+    hash: String!
 ) on QUERY | MUTATION
 
 """
@@ -341,9 +341,9 @@ Commit is a snapshot of the database at a specific changeset.
 """
 type Commit {
     """
-    Content address of the commit.
+    Hash of the commit.
     """
-    link: String!
+    hash: String!
 }
 
 type Query {

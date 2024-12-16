@@ -8,9 +8,9 @@ extend type {{$name}} {
     """
     id: ID!
     """
-    The content address of this document.
+    The hash of this document.
     """
-    link: String!
+    hash: String!
 }
 
 """
