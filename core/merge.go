@@ -63,7 +63,7 @@ func (r *Repository) mergeCommits(ctx context.Context, baseHash, ourHash, theirH
 		Parents:  []Hash{ourHash, theirHash},
 		DataRoot: dataRoot,
 	}
-	return r.CreateCommit(ctx, commit)
+	return r.CreateObject(ctx, commit)
 }
 
 func (r *Repository) mergeDataRoots(ctx context.Context, baseHash, ourHash, theirHash Hash) (Hash, error) {
@@ -109,7 +109,7 @@ func (r *Repository) mergeDataRoots(ctx context.Context, baseHash, ourHash, thei
 	dataRoot := &DataRoot{
 		Collections: collections,
 	}
-	return r.CreateDataRoot(ctx, dataRoot)
+	return r.CreateObject(ctx, dataRoot)
 }
 
 func (r *Repository) mergeCollections(ctx context.Context, baseHash, ourHash, theirHash Hash) (Hash, error) {
@@ -122,15 +122,15 @@ func (r *Repository) mergeCollections(ctx context.Context, baseHash, ourHash, th
 	if ourHash.Equal(baseHash) {
 		return theirHash, nil
 	}
-	base, err := r.CollectionRoot(ctx, baseHash)
+	base, err := r.Collection(ctx, baseHash)
 	if err != nil {
 		return nil, err
 	}
-	ours, err := r.CollectionRoot(ctx, ourHash)
+	ours, err := r.Collection(ctx, ourHash)
 	if err != nil {
 		return nil, err
 	}
-	theirs, err := r.CollectionRoot(ctx, theirHash)
+	theirs, err := r.Collection(ctx, theirHash)
 	if err != nil {
 		return nil, err
 	}
@@ -152,10 +152,10 @@ func (r *Repository) mergeCollections(ctx context.Context, baseHash, ourHash, th
 		}
 		documents[k] = hash
 	}
-	collection := &CollectionRoot{
+	collection := &Collection{
 		Documents: documents,
 	}
-	return r.CreateCollectionRoot(ctx, collection)
+	return r.CreateObject(ctx, collection)
 }
 
 func (r *Repository) mergeDocuments(ctx context.Context, baseHash, ourHash, theirHash Hash) (Hash, error) {
@@ -190,7 +190,7 @@ func (r *Repository) mergeDocuments(ctx context.Context, baseHash, ourHash, thei
 	for k := range theirs {
 		keys[k] = struct{}{}
 	}
-	document := make(map[string]any)
+	document := NewDocument()
 	for k := range keys {
 		prop, err := r.mergeProperty(ctx, base[k], ours[k], theirs[k])
 		if err != nil {
@@ -198,7 +198,7 @@ func (r *Repository) mergeDocuments(ctx context.Context, baseHash, ourHash, thei
 		}
 		document[k] = prop
 	}
-	return r.CreateDocument(ctx, document)
+	return r.CreateObject(ctx, document)
 }
 
 func (r *Repository) mergeProperty(ctx context.Context, base, ours, theirs any) (any, error) {

@@ -27,29 +27,29 @@ type QueryParams struct {
 func Execute(ctx context.Context, repo *core.Repository, params QueryParams) QueryResponse {
 	exe, errs := NewRequest(ctx, repo, params)
 	if errs != nil {
-		return NewResponse(nil, errs)
+		return NewQueryResponse(nil, errs)
 	}
 	data, err := exe.Execute(ctx)
 	if err != nil {
-		return NewResponse(nil, err)
+		return NewQueryResponse(nil, err)
 	}
 	if exe.operation.Operation != ast.Mutation {
-		return NewResponse(data, nil)
+		return NewQueryResponse(data, nil)
 	}
 	// commit the transaction
 	hash, err := exe.tx.Commit(ctx)
 	if err != nil {
-		return NewResponse(nil, err)
+		return NewQueryResponse(nil, err)
 	}
 	err = repo.Merge(ctx, hash)
 	if err != nil {
-		return NewResponse(nil, err)
+		return NewQueryResponse(nil, err)
 	}
-	return NewResponse(data, nil)
+	return NewQueryResponse(data, nil)
 }
 
-// NewResponse returns a new GraphQL compliant response.
-func NewResponse(data any, err error) QueryResponse {
+// NewQueryResponse returns a new GraphQL compliant response.
+func NewQueryResponse(data any, err error) QueryResponse {
 	response := QueryResponse{
 		Data: data,
 	}

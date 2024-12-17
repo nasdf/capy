@@ -76,7 +76,7 @@ func (t *Transaction) DocumentIterator(ctx context.Context, collection string) (
 	if !ok {
 		return nil, fmt.Errorf("collection does not exist: %s", collection)
 	}
-	col, err := t.repo.CollectionRoot(ctx, hash)
+	col, err := t.repo.Collection(ctx, hash)
 	if err != nil {
 		return nil, err
 	}

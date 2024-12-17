@@ -72,7 +72,6 @@ func (e *Request) executeQuery(ctx context.Context, set ast.SelectionSet) (any, 
 func (e *Request) commitsQuery(ctx context.Context, field graphql.CollectedField) (any, error) {
 	fields := e.collectFields(field.SelectionSet, commitsFieldName)
 	result := make([]any, 0)
-
 	iter := e.tx.CommitIterator()
 	for !iter.Done() {
 		l, _, err := iter.Next(ctx)
@@ -116,7 +115,7 @@ func (e *Request) listQuery(ctx context.Context, field graphql.CollectedField, c
 		}
 		ctx = context.WithValue(ctx, idContextKey, id)
 		ctx = context.WithValue(ctx, hashContextKey, hash.String())
-		match, err := e.filterDocument(ctx, collection, doc, args["filter"])
+		match, err := e.tx.FilterDocument(ctx, collection, id, args["filter"])
 		if err != nil || !match {
 			return nil, err
 		}

@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/fxamacker/cbor/v2"
 	"github.com/nasdf/capy/graphql/schema_gen"
+
 	"github.com/vektah/gqlparser/v2/ast"
 )
 
@@ -23,43 +23,46 @@ type Repository struct {
 
 // InitRepository initializes a repo using the given schema and storage backend.
 func InitRepository(ctx context.Context, storage Storage, schemaSource string) (*Repository, error) {
-	schema, err := schema_gen.Execute(string(schemaSource))
+	schema, err := schema_gen.Execute(schemaSource)
 	if err != nil {
 		return nil, err
 	}
-	repo := &Repository{
-		schema:   schema,
-		storage:  storage,
-		conflict: TheirsConflictResolver,
+	repo := Repository{
+		storage: storage,
 	}
-	collection := &CollectionRoot{
+
+	// create initial collection root
+	collection := &Collection{
 		Documents: make(map[string]Hash),
 	}
-	collectionHash, err := repo.CreateCollectionRoot(ctx, collection)
+	collectionHash, err := repo.CreateObject(ctx, collection)
 	if err != nil {
 		return nil, err
 	}
-	collections := make(map[string]Hash)
-	for _, t := range schema.Types {
-		if t.BuiltIn || t.Kind != ast.Object {
-			continue
-		}
-		collections[t.Name] = collectionHash
-	}
+
+	// create initial data root
 	data := &DataRoot{
-		Collections: collections,
+		Collections: make(map[string]Hash),
 	}
-	dataHash, err := repo.CreateDataRoot(ctx, data)
+	for _, t := range schema.Types {
+		if !t.BuiltIn && t.Kind == ast.Object {
+			data.Collections[t.Name] = collectionHash
+		}
+	}
+	dataHash, err := repo.CreateObject(ctx, data)
 	if err != nil {
 		return nil, err
 	}
+
+	// create initial commit
 	commit := &Commit{
 		DataRoot: dataHash,
 	}
-	commitHash, err := repo.CreateCommit(ctx, commit)
+	commitHash, err := repo.CreateObject(ctx, commit)
 	if err != nil {
 		return nil, err
 	}
+
 	err = storage.Put(ctx, headKey, commitHash)
 	if err != nil {
 		return nil, err
@@ -68,8 +71,7 @@ func InitRepository(ctx context.Context, storage Storage, schemaSource string) (
 	if err != nil {
 		return nil, err
 	}
-	repo.head = commitHash
-	return repo, nil
+	return OpenRepository(ctx, storage)
 }
 
 // OpenRepository returns an existing repo using the given storage backend.
@@ -104,26 +106,8 @@ func (r *Repository) Head() Hash {
 	return r.head
 }
 
-// Commit returns the commit with the given hash.
-func (r *Repository) Commit(ctx context.Context, hash Hash) (*Commit, error) {
-	data, err := r.storage.Get(ctx, hash.String())
-	if err != nil {
-		return nil, err
-	}
-	var commit Commit
-	if err := cbor.Unmarshal(data, &commit); err != nil {
-		return nil, err
-	}
-	return &commit, nil
-}
-
-// CreateCommit creates a new commit and returns its hash.
-func (r *Repository) CreateCommit(ctx context.Context, commit *Commit) (Hash, error) {
-	enc, err := cbor.CoreDetEncOptions().EncMode()
-	if err != nil {
-		return nil, err
-	}
-	data, err := enc.Marshal(commit)
+func (r *Repository) CreateObject(ctx context.Context, object Object) (Hash, error) {
+	data, err := object.Encode()
 	if err != nil {
 		return nil, err
 	}
@@ -132,6 +116,15 @@ func (r *Repository) CreateCommit(ctx context.Context, commit *Commit) (Hash, er
 		return nil, err
 	}
 	return hash, nil
+}
+
+// Commit returns the commit with the given hash.
+func (r *Repository) Commit(ctx context.Context, hash Hash) (*Commit, error) {
+	data, err := r.storage.Get(ctx, hash.String())
+	if err != nil {
+		return nil, err
+	}
+	return DecodeCommit(data)
 }
 
 // DataRoot returns the data root with the given hash.
@@ -140,88 +133,25 @@ func (r *Repository) DataRoot(ctx context.Context, hash Hash) (*DataRoot, error)
 	if err != nil {
 		return nil, err
 	}
-	var dataRoot DataRoot
-	if err := cbor.Unmarshal(data, &dataRoot); err != nil {
-		return nil, err
-	}
-	return &dataRoot, nil
+	return DecodeDataRoot(data)
 }
 
-// CreateDataRoot creates a new data root and returns its hash.
-func (r *Repository) CreateDataRoot(ctx context.Context, dataRoot *DataRoot) (Hash, error) {
-	enc, err := cbor.CoreDetEncOptions().EncMode()
-	if err != nil {
-		return nil, err
-	}
-	data, err := enc.Marshal(dataRoot)
-	if err != nil {
-		return nil, err
-	}
-	hash := Sum(data)
-	if err := r.storage.Put(ctx, hash.String(), data); err != nil {
-		return nil, err
-	}
-	return hash, nil
-}
-
-// CollectionRoot returns the collection with the given hash.
-func (r *Repository) CollectionRoot(ctx context.Context, hash Hash) (*CollectionRoot, error) {
+// Collection returns the collection with the given hash.
+func (r *Repository) Collection(ctx context.Context, hash Hash) (*Collection, error) {
 	data, err := r.storage.Get(ctx, hash.String())
 	if err != nil {
 		return nil, err
 	}
-	var collectionsRoot CollectionRoot
-	if err := cbor.Unmarshal(data, &collectionsRoot); err != nil {
-		return nil, err
-	}
-	return &collectionsRoot, nil
-}
-
-// CreateCollectionRoot creates a collection and returns its hash.
-func (r *Repository) CreateCollectionRoot(ctx context.Context, collectionRoot *CollectionRoot) (Hash, error) {
-	enc, err := cbor.CoreDetEncOptions().EncMode()
-	if err != nil {
-		return nil, err
-	}
-	data, err := enc.Marshal(collectionRoot)
-	if err != nil {
-		return nil, err
-	}
-	hash := Sum(data)
-	if err := r.storage.Put(ctx, hash.String(), data); err != nil {
-		return nil, err
-	}
-	return hash, nil
+	return DecodeCollection(data)
 }
 
 // Document returns the document with the given hash.
-func (r *Repository) Document(ctx context.Context, hash Hash) (map[string]any, error) {
+func (r *Repository) Document(ctx context.Context, hash Hash) (Document, error) {
 	data, err := r.storage.Get(ctx, hash.String())
 	if err != nil {
 		return nil, err
 	}
-	var document map[string]any
-	if err := cbor.Unmarshal(data, &document); err != nil {
-		return nil, err
-	}
-	return document, nil
-}
-
-// CreateDocument creates a document and returns its hash.
-func (r *Repository) CreateDocument(ctx context.Context, document map[string]any) (Hash, error) {
-	enc, err := cbor.CoreDetEncOptions().EncMode()
-	if err != nil {
-		return nil, err
-	}
-	data, err := enc.Marshal(document)
-	if err != nil {
-		return nil, err
-	}
-	hash := Sum(data)
-	if err := r.storage.Put(ctx, hash.String(), data); err != nil {
-		return nil, err
-	}
-	return hash, nil
+	return DecodeDocument(data)
 }
 
 // Dump returns a mapping of all collections and document ids in the repo.
@@ -238,7 +168,7 @@ func (r *Repository) Dump(ctx context.Context) (map[string][]string, error) {
 	}
 	result := make(map[string][]string, len(dataRoot.Collections))
 	for n, h := range dataRoot.Collections {
-		collection, err := r.CollectionRoot(ctx, h)
+		collection, err := r.Collection(ctx, h)
 		if err != nil {
 			return nil, err
 		}

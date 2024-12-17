@@ -67,13 +67,13 @@ func (e *Request) updateMutation(ctx context.Context, field graphql.CollectedFie
 	}
 	updates := make([]string, 0)
 	for !iter.Done() {
-		id, hash, doc, err := iter.Next(ctx)
+		id, hash, _, err := iter.Next(ctx)
 		if err != nil {
 			return nil, err
 		}
 		ctx = context.WithValue(ctx, idContextKey, id)
 		ctx = context.WithValue(ctx, hashContextKey, hash.String())
-		match, err := e.filterDocument(ctx, collection, doc, filter)
+		match, err := e.tx.FilterDocument(ctx, collection, id, filter)
 		if err != nil || !match {
 			return nil, err
 		}
@@ -123,7 +123,7 @@ func (e *Request) deleteMutation(ctx context.Context, field graphql.CollectedFie
 		}
 		ctx = context.WithValue(ctx, idContextKey, id)
 		ctx = context.WithValue(ctx, hashContextKey, hash.String())
-		match, err := e.filterDocument(ctx, collection, doc, filter)
+		match, err := e.tx.FilterDocument(ctx, collection, id, filter)
 		if err != nil || !match {
 			return nil, err
 		}

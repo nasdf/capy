@@ -7,4 +7,3 @@ A distributed graph database.
 - Define schemas, queries, and mutations using GraphQL
 - Branch, merge, and sync data with automated merge strategies
 - Log, diff, and revert changes from the transaction graph
-
