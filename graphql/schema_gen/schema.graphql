@@ -68,6 +68,10 @@ input {{$name}}ListPatchInput {
     Append values to the field.
     """
     append: [{{$name}}CreateInput]
+    """
+    Filter values in the field.
+    """
+    filter: {{$name}}ListFilterInput
 }
 
 """

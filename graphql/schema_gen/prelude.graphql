@@ -282,6 +282,10 @@ input StringListPatchInput {
     Append values to the field.
     """
     append: [String]
+    """
+    Filter values in the field.
+    """
+    filter: StringListFilterInput
 }
 
 """
@@ -296,6 +300,10 @@ input FloatListPatchInput {
     Append values to the field.
     """
     append: [Float]
+    """
+    Filter values in the field.
+    """
+    filter: FloatListFilterInput
 }
 
 """
@@ -310,6 +318,10 @@ input IntListPatchInput {
     Append values to the field.
     """
     append: [Int]
+    """
+    Filter values in the field.
+    """
+    filter: IntListFilterInput
 }
 
 """
@@ -324,6 +336,10 @@ input BooleanListPatchInput {
     Append values to the field.
     """
     append: [Boolean]
+    """
+    Filter values in the field.
+    """
+    filter: BooleanListFilterInput
 }
 
 """

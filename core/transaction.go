@@ -11,10 +11,12 @@ import (
 )
 
 const (
-	// setPatch is a patch operation that overwrites a field value.
+	// setPatch is a patch operation that sets a field value.
 	setPatch = "set"
 	// appendPatch is a patch operation that appends a value to a list field.
 	appendPatch = "append"
+	// filterPatch is a patch operation that filters a list value.
+	filterPatch = "filter"
 	// equalFilter matches if the target value is equal to the filter value.
 	equalFilter = "eq"
 	// notEqualFilter matches if the target value is not equal to the filter value.
@@ -303,6 +305,18 @@ func (t *Transaction) patchValue(ctx context.Context, typ *ast.Type, value any, 
 			return []any{n}, nil
 		}
 		return append(value.([]any), n), nil
+	case filterPatch:
+		result := make([]any, 0)
+		for _, v := range value.([]any) {
+			match, err := t.filterValue(ctx, typ.Elem, v, p[op])
+			if err != nil {
+				return nil, err
+			}
+			if match {
+				result = append(result, v)
+			}
+		}
+		return result, nil
 	default:
 		return nil, fmt.Errorf("invalid patch operation %s", op)
 	}
