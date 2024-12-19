@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/nasdf/capy/object"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -178,8 +180,8 @@ func TestIndependentsSimple(t *testing.T) {
 	repo, err := InitRepository(ctx, storage, schema)
 	require.NoError(t, err)
 
-	var head Hash
-	commits := make([]Hash, 5)
+	var head object.Hash
+	commits := make([]object.Hash, 5)
 	for i := 0; i < len(commits); i++ {
 		tx, err := repo.Transaction(ctx, repo.Head())
 		require.NoError(t, err)

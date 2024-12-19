@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/nasdf/capy/object"
+
 	"github.com/google/uuid"
 	"github.com/vektah/gqlparser/v2/ast"
 )
@@ -47,14 +49,15 @@ const (
 	noneFilter = "none"
 )
 
+// Transaction is used to create, read, and update documents.
 type Transaction struct {
 	repo *Repository
-	data *DataRoot
-	hash Hash
+	data *object.DataRoot
+	hash object.Hash
 }
 
 // Transactions returns a new transaction based on the commit with the given hash.
-func (r *Repository) Transaction(ctx context.Context, hash Hash) (*Transaction, error) {
+func (r *Repository) Transaction(ctx context.Context, hash object.Hash) (*Transaction, error) {
 	commit, err := r.Commit(ctx, hash)
 	if err != nil {
 		return nil, err
@@ -71,18 +74,19 @@ func (r *Repository) Transaction(ctx context.Context, hash Hash) (*Transaction, 
 }
 
 // Commit creates a new commit containing the transaction data.
-func (t *Transaction) Commit(ctx context.Context) (Hash, error) {
-	data, err := t.repo.CreateObject(ctx, t.data)
+func (t *Transaction) Commit(ctx context.Context) (object.Hash, error) {
+	data, err := EncodeObject(ctx, t.repo.storage, t.data)
 	if err != nil {
 		return nil, err
 	}
-	commit := &Commit{
-		Parents:  []Hash{t.hash},
+	commit := &object.Commit{
+		Parents:  []object.Hash{t.hash},
 		DataRoot: data,
 	}
-	return t.repo.CreateObject(ctx, commit)
+	return EncodeObject(ctx, t.repo.storage, commit)
 }
 
+// ReadDocument returns the document from the given collection with the matching id.
 func (t *Transaction) ReadDocument(ctx context.Context, collection, id string) (map[string]any, error) {
 	colHash, ok := t.data.Collections[collection]
 	if !ok {
@@ -99,6 +103,7 @@ func (t *Transaction) ReadDocument(ctx context.Context, collection, id string) (
 	return t.repo.Document(ctx, docHash)
 }
 
+// DeleteDocument deletes the document from the given collection with the matching id.
 func (t *Transaction) DeleteDocument(ctx context.Context, collection, id string) error {
 	colHash, ok := t.data.Collections[collection]
 	if !ok {
@@ -109,7 +114,7 @@ func (t *Transaction) DeleteDocument(ctx context.Context, collection, id string)
 		return err
 	}
 	delete(col.Documents, id)
-	colHash, err = t.repo.CreateObject(ctx, col)
+	colHash, err = EncodeObject(ctx, t.repo.storage, col)
 	if err != nil {
 		return err
 	}
@@ -117,12 +122,13 @@ func (t *Transaction) DeleteDocument(ctx context.Context, collection, id string)
 	return nil
 }
 
+// CreateDocument adds a document to the given collection and returns its unique id.
 func (t *Transaction) CreateDocument(ctx context.Context, collection string, value map[string]any) (string, error) {
 	def, ok := t.repo.schema.Types[collection]
 	if !ok || def.BuiltIn || def.Kind != ast.Object {
 		return "", fmt.Errorf("collection does not exist: %s", collection)
 	}
-	doc, err := t.normalizeDocument(ctx, def, value)
+	doc, err := t.createDocument(ctx, def, value)
 	if err != nil {
 		return "", err
 	}
@@ -130,7 +136,7 @@ func (t *Transaction) CreateDocument(ctx context.Context, collection string, val
 	if err != nil {
 		return "", err
 	}
-	docHash, err := t.repo.CreateObject(ctx, doc)
+	docHash, err := EncodeObject(ctx, t.repo.storage, doc)
 	if err != nil {
 		return "", err
 	}
@@ -143,7 +149,7 @@ func (t *Transaction) CreateDocument(ctx context.Context, collection string, val
 		return "", err
 	}
 	col.Documents[id.String()] = docHash
-	colHash, err = t.repo.CreateObject(ctx, col)
+	colHash, err = EncodeObject(ctx, t.repo.storage, col)
 	if err != nil {
 		return "", err
 	}
@@ -151,6 +157,7 @@ func (t *Transaction) CreateDocument(ctx context.Context, collection string, val
 	return id.String(), nil
 }
 
+// FilterDocument returns a bool indicating if the document in the given collection with matching id passes the given filter.
 func (t *Transaction) FilterDocument(ctx context.Context, collection, id string, filter any) (bool, error) {
 	colHash, ok := t.data.Collections[collection]
 	if !ok {
@@ -172,6 +179,7 @@ func (t *Transaction) FilterDocument(ctx context.Context, collection, id string,
 	return t.filterDocument(ctx, def, doc, filter)
 }
 
+// PatchDocument updates the document in the given collection with matching id by applying the operations in the patch.
 func (t *Transaction) PatchDocument(ctx context.Context, collection, id string, patch map[string]any) error {
 	colHash, ok := t.data.Collections[collection]
 	if !ok {
@@ -194,12 +202,12 @@ func (t *Transaction) PatchDocument(ctx context.Context, collection, id string, 
 	if err != nil {
 		return err
 	}
-	docHash, err = t.repo.CreateObject(ctx, doc)
+	docHash, err = EncodeObject(ctx, t.repo.storage, doc)
 	if err != nil {
 		return err
 	}
 	col.Documents[id] = docHash
-	colHash, err = t.repo.CreateObject(ctx, col)
+	colHash, err = EncodeObject(ctx, t.repo.storage, col)
 	if err != nil {
 		return err
 	}
@@ -207,14 +215,14 @@ func (t *Transaction) PatchDocument(ctx context.Context, collection, id string, 
 	return nil
 }
 
-func (t *Transaction) normalizeDocument(ctx context.Context, def *ast.Definition, value map[string]any) (Document, error) {
+func (t *Transaction) createDocument(ctx context.Context, def *ast.Definition, value map[string]any) (object.Document, error) {
 	out := make(map[string]any)
 	for k, v := range value {
 		field := def.Fields.ForName(k)
 		if field == nil {
 			return nil, fmt.Errorf("invalid document field %s", k)
 		}
-		norm, err := t.normalizeValue(ctx, field.Type, v)
+		norm, err := t.createValue(ctx, field.Type, v)
 		if err != nil {
 			return nil, err
 		}
@@ -223,24 +231,24 @@ func (t *Transaction) normalizeDocument(ctx context.Context, def *ast.Definition
 	return out, nil
 }
 
-func (t *Transaction) normalizeValue(ctx context.Context, typ *ast.Type, value any) (any, error) {
+func (t *Transaction) createValue(ctx context.Context, typ *ast.Type, value any) (any, error) {
 	if !typ.NonNull && value == nil {
 		return nil, nil
 	}
 	if typ.Elem != nil {
-		return t.normalizeList(ctx, typ.Elem, value.([]any))
+		return t.createList(ctx, typ.Elem, value.([]any))
 	}
 	def := t.repo.schema.Types[typ.NamedType]
 	if def.Kind == ast.Object {
-		return t.normalizeRelation(ctx, typ, value.(map[string]any))
+		return t.createRelation(ctx, typ, value.(map[string]any))
 	}
 	return value, nil
 }
 
-func (t *Transaction) normalizeList(ctx context.Context, typ *ast.Type, value []any) ([]any, error) {
+func (t *Transaction) createList(ctx context.Context, typ *ast.Type, value []any) ([]any, error) {
 	out := make([]any, len(value))
 	for i, v := range value {
-		norm, err := t.normalizeValue(ctx, typ, v)
+		norm, err := t.createValue(ctx, typ, v)
 		if err != nil {
 			return nil, err
 		}
@@ -249,7 +257,7 @@ func (t *Transaction) normalizeList(ctx context.Context, typ *ast.Type, value []
 	return out, nil
 }
 
-func (t *Transaction) normalizeRelation(ctx context.Context, typ *ast.Type, value map[string]any) (string, error) {
+func (t *Transaction) createRelation(ctx context.Context, typ *ast.Type, value map[string]any) (string, error) {
 	id, ok := value["id"].(string)
 	if ok {
 		return id, nil
@@ -295,9 +303,9 @@ func (t *Transaction) patchValue(ctx context.Context, typ *ast.Type, value any, 
 	}
 	switch op {
 	case setPatch:
-		return t.normalizeValue(ctx, typ, p[op])
+		return t.createValue(ctx, typ, p[op])
 	case appendPatch:
-		n, err := t.normalizeValue(ctx, typ.Elem, p[op])
+		n, err := t.createValue(ctx, typ.Elem, p[op])
 		if err != nil {
 			return nil, err
 		}

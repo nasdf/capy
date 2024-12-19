@@ -4,20 +4,22 @@ import (
 	"context"
 	"fmt"
 	"slices"
+
+	"github.com/nasdf/capy/object"
 )
 
 type CommitIterator struct {
 	repo *Repository
-	next []Hash
+	next []object.Hash
 	seen map[string]struct{}
 	prev int
 }
 
 // CommitIterator returns a new iterator that can be used to iterate through all parents of a commit.
-func (r *Repository) CommitIterator(hash Hash) *CommitIterator {
+func (r *Repository) CommitIterator(hash object.Hash) *CommitIterator {
 	return &CommitIterator{
 		repo: r,
-		next: []Hash{hash},
+		next: []object.Hash{hash},
 		seen: make(map[string]struct{}),
 	}
 }
@@ -26,7 +28,7 @@ func (r *Repository) CommitIterator(hash Hash) *CommitIterator {
 func (t *Transaction) CommitIterator() *CommitIterator {
 	return &CommitIterator{
 		repo: t.repo,
-		next: []Hash{t.hash},
+		next: []object.Hash{t.hash},
 		seen: make(map[string]struct{}),
 	}
 }
@@ -43,7 +45,7 @@ func (i *CommitIterator) Skip() {
 }
 
 // Next returns the next commit from the iterator.
-func (i *CommitIterator) Next(ctx context.Context) (Hash, *Commit, error) {
+func (i *CommitIterator) Next(ctx context.Context) (object.Hash, *object.Commit, error) {
 	hash := i.next[0]
 	i.next = i.next[1:]
 	i.prev = len(i.next)
@@ -67,7 +69,7 @@ func (i *CommitIterator) Next(ctx context.Context) (Hash, *Commit, error) {
 type DocumentIterator struct {
 	repo *Repository
 	keys []string
-	docs map[string]Hash
+	docs map[string]object.Hash
 }
 
 // NewDocumentIterator returns a new iterator that can be used to iterate through all documents in a collection.
@@ -98,7 +100,7 @@ func (i *DocumentIterator) Done() bool {
 }
 
 // Next returns the next document id and document node from the iterator.
-func (i *DocumentIterator) Next(ctx context.Context) (string, Hash, map[string]any, error) {
+func (i *DocumentIterator) Next(ctx context.Context) (string, object.Hash, map[string]any, error) {
 	key := i.keys[0]
 	val := i.docs[key]
 	i.keys = i.keys[1:]

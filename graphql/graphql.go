@@ -9,13 +9,6 @@ import (
 	"github.com/vektah/gqlparser/v2/gqlerror"
 )
 
-// QueryResponse contains all of the fields for a response.
-type QueryResponse struct {
-	Data       any           `json:"data,omitempty"`
-	Errors     gqlerror.List `json:"errors,omitempty"`
-	Extensions any           `json:"extensions,omitempty"`
-}
-
 // QueryParams contains all of the parameters for a query.
 type QueryParams struct {
 	Query         string         `json:"query"`
@@ -46,6 +39,13 @@ func Execute(ctx context.Context, repo *core.Repository, params QueryParams) Que
 		return NewQueryResponse(nil, err)
 	}
 	return NewQueryResponse(data, nil)
+}
+
+// QueryResponse contains all of the fields for a response.
+type QueryResponse struct {
+	Data       any           `json:"data,omitempty"`
+	Errors     gqlerror.List `json:"errors,omitempty"`
+	Extensions any           `json:"extensions,omitempty"`
 }
 
 // NewQueryResponse returns a new GraphQL compliant response.

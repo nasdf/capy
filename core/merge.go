@@ -3,6 +3,8 @@ package core
 import (
 	"context"
 	"fmt"
+
+	"github.com/nasdf/capy/object"
 )
 
 // MergeConflictResolver is a callback function that is used to resolver merge conflicts.
@@ -19,7 +21,7 @@ var OursConflictResolver MergeConflictResolver = func(ctx context.Context, base,
 }
 
 // Merge attempts to Merge the commit with the given hash into the current head.
-func (r *Repository) Merge(ctx context.Context, hash Hash) error {
+func (r *Repository) Merge(ctx context.Context, hash object.Hash) error {
 	bases, err := r.mergeBase(ctx, r.head, hash)
 	if err != nil {
 		return err
@@ -36,7 +38,7 @@ func (r *Repository) Merge(ctx context.Context, hash Hash) error {
 }
 
 // mergeCommits returns the results of a three way merge between the given commit hashes.
-func (r *Repository) mergeCommits(ctx context.Context, baseHash, ourHash, theirHash Hash) (Hash, error) {
+func (r *Repository) mergeCommits(ctx context.Context, baseHash, ourHash, theirHash object.Hash) (object.Hash, error) {
 	if theirHash.Equal(baseHash) {
 		return ourHash, nil
 	}
@@ -59,14 +61,14 @@ func (r *Repository) mergeCommits(ctx context.Context, baseHash, ourHash, theirH
 	if err != nil {
 		return nil, err
 	}
-	commit := &Commit{
-		Parents:  []Hash{ourHash, theirHash},
+	commit := &object.Commit{
+		Parents:  []object.Hash{ourHash, theirHash},
 		DataRoot: dataRoot,
 	}
-	return r.CreateObject(ctx, commit)
+	return EncodeObject(ctx, r.storage, commit)
 }
 
-func (r *Repository) mergeDataRoots(ctx context.Context, baseHash, ourHash, theirHash Hash) (Hash, error) {
+func (r *Repository) mergeDataRoots(ctx context.Context, baseHash, ourHash, theirHash object.Hash) (object.Hash, error) {
 	if theirHash.Equal(baseHash) && ourHash.Equal(baseHash) {
 		return baseHash, nil
 	}
@@ -98,7 +100,7 @@ func (r *Repository) mergeDataRoots(ctx context.Context, baseHash, ourHash, thei
 	for k := range theirs.Collections {
 		keys[k] = struct{}{}
 	}
-	collections := make(map[string]Hash)
+	collections := make(map[string]object.Hash)
 	for k := range keys {
 		hash, err := r.mergeCollections(ctx, base.Collections[k], ours.Collections[k], theirs.Collections[k])
 		if err != nil {
@@ -106,13 +108,13 @@ func (r *Repository) mergeDataRoots(ctx context.Context, baseHash, ourHash, thei
 		}
 		collections[k] = hash
 	}
-	dataRoot := &DataRoot{
+	dataRoot := &object.DataRoot{
 		Collections: collections,
 	}
-	return r.CreateObject(ctx, dataRoot)
+	return EncodeObject(ctx, r.storage, dataRoot)
 }
 
-func (r *Repository) mergeCollections(ctx context.Context, baseHash, ourHash, theirHash Hash) (Hash, error) {
+func (r *Repository) mergeCollections(ctx context.Context, baseHash, ourHash, theirHash object.Hash) (object.Hash, error) {
 	if theirHash.Equal(baseHash) && ourHash.Equal(baseHash) {
 		return baseHash, nil
 	}
@@ -144,7 +146,7 @@ func (r *Repository) mergeCollections(ctx context.Context, baseHash, ourHash, th
 	for k := range theirs.Documents {
 		keys[k] = struct{}{}
 	}
-	documents := make(map[string]Hash)
+	documents := make(map[string]object.Hash)
 	for k := range keys {
 		hash, err := r.mergeDocuments(ctx, base.Documents[k], ours.Documents[k], theirs.Documents[k])
 		if err != nil {
@@ -152,13 +154,13 @@ func (r *Repository) mergeCollections(ctx context.Context, baseHash, ourHash, th
 		}
 		documents[k] = hash
 	}
-	collection := &Collection{
+	collection := &object.Collection{
 		Documents: documents,
 	}
-	return r.CreateObject(ctx, collection)
+	return EncodeObject(ctx, r.storage, collection)
 }
 
-func (r *Repository) mergeDocuments(ctx context.Context, baseHash, ourHash, theirHash Hash) (Hash, error) {
+func (r *Repository) mergeDocuments(ctx context.Context, baseHash, ourHash, theirHash object.Hash) (object.Hash, error) {
 	if theirHash.Equal(baseHash) && ourHash.Equal(baseHash) {
 		return baseHash, nil
 	}
@@ -190,7 +192,7 @@ func (r *Repository) mergeDocuments(ctx context.Context, baseHash, ourHash, thei
 	for k := range theirs {
 		keys[k] = struct{}{}
 	}
-	document := NewDocument()
+	document := object.NewDocument()
 	for k := range keys {
 		prop, err := r.mergeProperty(ctx, base[k], ours[k], theirs[k])
 		if err != nil {
@@ -198,7 +200,7 @@ func (r *Repository) mergeDocuments(ctx context.Context, baseHash, ourHash, thei
 		}
 		document[k] = prop
 	}
-	return r.CreateObject(ctx, document)
+	return EncodeObject(ctx, r.storage, document)
 }
 
 func (r *Repository) mergeProperty(ctx context.Context, base, ours, theirs any) (any, error) {
@@ -215,7 +217,7 @@ func (r *Repository) mergeProperty(ctx context.Context, base, ours, theirs any) 
 }
 
 // mergeBase returns the best common ancestor for merging the two given commits.
-func (r *Repository) mergeBase(ctx context.Context, oldHash, newHash Hash) ([]Hash, error) {
+func (r *Repository) mergeBase(ctx context.Context, oldHash, newHash object.Hash) ([]object.Hash, error) {
 	seen := map[string]struct{}{}
 	iter := r.CommitIterator(newHash)
 	for !iter.Done() {
@@ -224,11 +226,11 @@ func (r *Repository) mergeBase(ctx context.Context, oldHash, newHash Hash) ([]Ha
 			return nil, err
 		}
 		if oldHash.Equal(hash) {
-			return []Hash{hash}, nil
+			return []object.Hash{hash}, nil
 		}
 		seen[hash.String()] = struct{}{}
 	}
-	var bases []Hash
+	var bases []object.Hash
 	iter = r.CommitIterator(oldHash)
 	for !iter.Done() {
 		lnk, _, err := iter.Next(ctx)
@@ -246,11 +248,11 @@ func (r *Repository) mergeBase(ctx context.Context, oldHash, newHash Hash) ([]Ha
 }
 
 // independents returns a sub list where each entry is not an ancestor of any other entry.
-func (r *Repository) independents(ctx context.Context, hashes []Hash) ([]Hash, error) {
+func (r *Repository) independents(ctx context.Context, hashes []object.Hash) ([]object.Hash, error) {
 	if len(hashes) < 2 {
 		return hashes, nil
 	}
-	keep := make(map[string]Hash)
+	keep := make(map[string]object.Hash)
 	for _, h := range hashes {
 		keep[h.String()] = h
 	}
@@ -277,7 +279,7 @@ func (r *Repository) independents(ctx context.Context, hashes []Hash) ([]Hash, e
 			seen[hash.String()] = struct{}{}
 		}
 	}
-	result := make([]Hash, 0, len(keep))
+	result := make([]object.Hash, 0, len(keep))
 	for _, h := range keep {
 		result = append(result, h)
 	}

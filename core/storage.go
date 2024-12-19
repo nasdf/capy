@@ -1,8 +1,14 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
+
+	"github.com/nasdf/capy/codec"
+	"github.com/nasdf/capy/object"
+	"golang.org/x/crypto/sha3"
 )
 
 var ErrNotFound = errors.New("key not found")
@@ -12,29 +18,27 @@ type Storage interface {
 	Put(ctx context.Context, key string, value []byte) error
 }
 
-type memoryStorage struct {
-	values map[string][]byte
-}
+// EncodeObject writes an encoded object to the given storage and returns its hash.
+//
+// The key for the object is the computed hash of the encoded bytes.
+func EncodeObject(ctx context.Context, storage Storage, value any) (object.Hash, error) {
+	hash := sha3.New256()
+	buff := bytes.NewBuffer(nil)
 
-func NewMemoryStorage() Storage {
-	return &memoryStorage{
-		values: make(map[string][]byte),
+	enc := codec.NewEncoder(io.MultiWriter(hash, buff))
+	err := enc.Encode(value)
+	if err != nil {
+		return nil, err
 	}
-}
-
-func (m *memoryStorage) Get(ctx context.Context, key string) ([]byte, error) {
-	content, ok := m.values[key]
-	if !ok {
-		return nil, ErrNotFound
+	err = enc.Flush()
+	if err != nil {
+		return nil, err
 	}
-	val := make([]byte, len(content))
-	copy(val, content)
-	return val, nil
-}
 
-func (m *memoryStorage) Put(ctx context.Context, key string, value []byte) error {
-	val := make([]byte, len(value))
-	copy(val, value)
-	m.values[key] = val
-	return nil
+	sum := object.Hash(hash.Sum(nil))
+	err = storage.Put(ctx, sum.String(), buff.Bytes())
+	if err != nil {
+		return nil, err
+	}
+	return sum, nil
 }

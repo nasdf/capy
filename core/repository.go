@@ -1,90 +1,35 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"errors"
 
+	"github.com/nasdf/capy/codec"
 	"github.com/nasdf/capy/graphql/schema_gen"
+	"github.com/nasdf/capy/object"
 
+	"github.com/vektah/gqlparser/v2"
 	"github.com/vektah/gqlparser/v2/ast"
 )
 
 const (
-	schemaKey = "schema"
-	headKey   = "head"
+	//SchemaKey is the key used to store the input schema.
+	SchemaKey = "schema"
+	// HeadKey is the key used to store the repo head.
+	HeadKey = "head"
 )
 
+// Repository contains all database objects.
 type Repository struct {
-	head     Hash
+	head     object.Hash
 	schema   *ast.Schema
 	storage  Storage
 	conflict MergeConflictResolver
 }
 
-// InitRepository initializes a repo using the given schema and storage backend.
-func InitRepository(ctx context.Context, storage Storage, schemaSource string) (*Repository, error) {
-	schema, err := schema_gen.Execute(schemaSource)
-	if err != nil {
-		return nil, err
-	}
-	repo := Repository{
-		storage: storage,
-	}
-
-	// create initial collection root
-	collection := &Collection{
-		Documents: make(map[string]Hash),
-	}
-	collectionHash, err := repo.CreateObject(ctx, collection)
-	if err != nil {
-		return nil, err
-	}
-
-	// create initial data root
-	data := &DataRoot{
-		Collections: make(map[string]Hash),
-	}
-	for _, t := range schema.Types {
-		if !t.BuiltIn && t.Kind == ast.Object {
-			data.Collections[t.Name] = collectionHash
-		}
-	}
-	dataHash, err := repo.CreateObject(ctx, data)
-	if err != nil {
-		return nil, err
-	}
-
-	// create initial commit
-	commit := &Commit{
-		DataRoot: dataHash,
-	}
-	commitHash, err := repo.CreateObject(ctx, commit)
-	if err != nil {
-		return nil, err
-	}
-
-	err = storage.Put(ctx, headKey, commitHash)
-	if err != nil {
-		return nil, err
-	}
-	err = storage.Put(ctx, schemaKey, []byte(schemaSource))
-	if err != nil {
-		return nil, err
-	}
-	return OpenRepository(ctx, storage)
-}
-
-// OpenRepository returns an existing repo using the given storage backend.
-func OpenRepository(ctx context.Context, storage Storage) (*Repository, error) {
-	head, err := storage.Get(ctx, headKey)
-	if !errors.Is(err, ErrNotFound) && err != nil {
-		return nil, err
-	}
-	schemaSource, err := storage.Get(ctx, schemaKey)
-	if err != nil {
-		return nil, err
-	}
-	schema, err := schema_gen.Execute(string(schemaSource))
+func NewRepository(head object.Hash, schemaInput string, storage Storage) (*Repository, error) {
+	schema, err := schema_gen.Execute(schemaInput)
 	if err != nil {
 		return nil, err
 	}
@@ -96,62 +41,117 @@ func OpenRepository(ctx context.Context, storage Storage) (*Repository, error) {
 	}, nil
 }
 
+// InitRepository initializes a repo using the given schema and storage backend.
+func InitRepository(ctx context.Context, storage Storage, schemaInput string) (*Repository, error) {
+	schema, err := gqlparser.LoadSchema(&ast.Source{Input: schemaInput})
+	if err != nil {
+		return nil, err
+	}
+
+	// create initial collection root
+	collection := &object.Collection{
+		Documents: make(map[string]object.Hash),
+	}
+	collectionHash, err := EncodeObject(ctx, storage, collection)
+	if err != nil {
+		return nil, err
+	}
+
+	// create initial data root
+	data := &object.DataRoot{
+		Collections: make(map[string]object.Hash),
+	}
+	for _, t := range schema.Types {
+		if !t.BuiltIn && t.Kind == ast.Object {
+			data.Collections[t.Name] = collectionHash
+		}
+	}
+	dataHash, err := EncodeObject(ctx, storage, data)
+	if err != nil {
+		return nil, err
+	}
+
+	// create initial commit
+	commit := &object.Commit{
+		DataRoot: dataHash,
+	}
+	commitHash, err := EncodeObject(ctx, storage, commit)
+	if err != nil {
+		return nil, err
+	}
+
+	err = storage.Put(ctx, HeadKey, commitHash)
+	if err != nil {
+		return nil, err
+	}
+	err = storage.Put(ctx, SchemaKey, []byte(schemaInput))
+	if err != nil {
+		return nil, err
+	}
+	return NewRepository(commitHash, schemaInput, storage)
+}
+
+// OpenRepository returns an existing repo using the given storage backend.
+func OpenRepository(ctx context.Context, storage Storage) (*Repository, error) {
+	head, err := storage.Get(ctx, HeadKey)
+	if !errors.Is(err, ErrNotFound) && err != nil {
+		return nil, err
+	}
+	schemaInput, err := storage.Get(ctx, SchemaKey)
+	if err != nil {
+		return nil, err
+	}
+	return NewRepository(head, string(schemaInput), storage)
+}
+
 // Schema returns the schema that describes the collections.
 func (r *Repository) Schema() *ast.Schema {
 	return r.schema
 }
 
 // Head returns the repo head hash.
-func (r *Repository) Head() Hash {
+func (r *Repository) Head() object.Hash {
 	return r.head
 }
 
-func (r *Repository) CreateObject(ctx context.Context, object Object) (Hash, error) {
-	data, err := object.Encode()
-	if err != nil {
-		return nil, err
-	}
-	hash := Sum(data)
-	if err := r.storage.Put(ctx, hash.String(), data); err != nil {
-		return nil, err
-	}
-	return hash, nil
-}
-
 // Commit returns the commit with the given hash.
-func (r *Repository) Commit(ctx context.Context, hash Hash) (*Commit, error) {
+func (r *Repository) Commit(ctx context.Context, hash object.Hash) (*object.Commit, error) {
 	data, err := r.storage.Get(ctx, hash.String())
 	if err != nil {
 		return nil, err
 	}
-	return DecodeCommit(data)
+	dec := codec.NewDecoder(bytes.NewBuffer(data))
+	return dec.DecodeCommit()
 }
 
 // DataRoot returns the data root with the given hash.
-func (r *Repository) DataRoot(ctx context.Context, hash Hash) (*DataRoot, error) {
+func (r *Repository) DataRoot(ctx context.Context, hash object.Hash) (*object.DataRoot, error) {
 	data, err := r.storage.Get(ctx, hash.String())
 	if err != nil {
 		return nil, err
 	}
-	return DecodeDataRoot(data)
+	dec := codec.NewDecoder(bytes.NewBuffer(data))
+	return dec.DecodeDataRoot()
 }
 
 // Collection returns the collection with the given hash.
-func (r *Repository) Collection(ctx context.Context, hash Hash) (*Collection, error) {
+func (r *Repository) Collection(ctx context.Context, hash object.Hash) (*object.Collection, error) {
 	data, err := r.storage.Get(ctx, hash.String())
 	if err != nil {
 		return nil, err
 	}
-	return DecodeCollection(data)
+	dec := codec.NewDecoder(bytes.NewBuffer(data))
+	return dec.DecodeCollection()
 }
 
 // Document returns the document with the given hash.
-func (r *Repository) Document(ctx context.Context, hash Hash) (Document, error) {
+func (r *Repository) Document(ctx context.Context, hash object.Hash) (object.Document, error) {
 	data, err := r.storage.Get(ctx, hash.String())
 	if err != nil {
 		return nil, err
 	}
-	return DecodeDocument(data)
+	dec := codec.NewDecoder(bytes.NewBuffer(data))
+	return dec.DecodeDocument()
 }
 
 // Dump returns a mapping of all collections and document ids in the repo.
