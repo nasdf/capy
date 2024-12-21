@@ -13,18 +13,17 @@ func NewError(err error) js.Value {
 	return js.Global().Get("Error").New(err.Error())
 }
 
+// PromiseExecutor is the function that will be called to resolve or reject the promise.
+//
+// See https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/Promise#executor
+type PromiseExecutor func(resolve, reject func(args ...any) js.Value) any
+
 // NewPromise returns a new promise that calls the given executor function.
-func NewPromise(fn func(resolve, reject func(value js.Value) js.Value) any) js.Value {
+func NewPromise(fn PromiseExecutor) js.Value {
 	var executor js.Func
 	executor = js.FuncOf(func(this js.Value, args []js.Value) any {
-		executor.Release()
-		resolve := func(value js.Value) js.Value {
-			return args[0].Invoke(value)
-		}
-		reject := func(value js.Value) js.Value {
-			return args[1].Invoke(value)
-		}
-		return fn(resolve, reject)
+		defer executor.Release()
+		return fn(args[0].Invoke, args[1].Invoke)
 	})
 	return js.Global().Get("Promise").New(executor)
 }
@@ -40,6 +39,7 @@ func AwaitPromise(v js.Value) (res []js.Value, err error) {
 		res = args
 		return js.Undefined()
 	})
+	defer onFulfilled.Release()
 
 	// called when the promise is rejected
 	onRejected := js.FuncOf(func(this js.Value, args []js.Value) any {
@@ -47,13 +47,11 @@ func AwaitPromise(v js.Value) (res []js.Value, err error) {
 		err = errors.New(args[0].String())
 		return js.Undefined()
 	})
+	defer onRejected.Release()
 
 	wait.Add(1)
 	v.Call("then", onFulfilled, onRejected)
 	wait.Wait()
-
-	onFulfilled.Release()
-	onRejected.Release()
 
 	return
 }

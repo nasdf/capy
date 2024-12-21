@@ -18,7 +18,7 @@ func main() {
 
 //export init
 func initRepository(storage js.Value, schema string) js.Value {
-	return jsutil.NewPromise(func(resolve, reject func(value js.Value) js.Value) any {
+	return jsutil.NewPromise(func(resolve, reject func(args ...any) js.Value) any {
 		_, err := core.InitRepository(context.Background(), core.NewJSStorage(storage), schema)
 		if err != nil {
 			return reject(jsutil.NewError(err))
@@ -29,7 +29,7 @@ func initRepository(storage js.Value, schema string) js.Value {
 
 //export execute
 func execute(storage js.Value, query string, operationName string, variables map[string]any) js.Value {
-	return jsutil.NewPromise(func(resolve, reject func(value js.Value) js.Value) any {
+	return jsutil.NewPromise(func(resolve, reject func(args ...any) js.Value) any {
 		repo, err := core.OpenRepository(context.Background(), core.NewJSStorage(storage))
 		if err != nil {
 			return reject(jsutil.NewError(err))
