@@ -43,9 +43,9 @@ func Execute(ctx context.Context, repo *core.Repository, params QueryParams) Que
 
 // QueryResponse contains all of the fields for a response.
 type QueryResponse struct {
-	Data       any           `json:"data,omitempty"`
-	Errors     gqlerror.List `json:"errors,omitempty"`
-	Extensions any           `json:"extensions,omitempty"`
+	Data       any            `json:"data,omitempty"`
+	Errors     gqlerror.List  `json:"errors,omitempty"`
+	Extensions map[string]any `json:"extensions,omitempty"`
 }
 
 // NewQueryResponse returns a new GraphQL compliant response.
@@ -64,4 +64,43 @@ func NewQueryResponse(data any, err error) QueryResponse {
 		response.Errors = gqlerror.List{gqlerror.Wrap(err)}
 	}
 	return response
+}
+
+// ToMap converts the query response to a standard go map.
+//
+// This is used to convert values in environments such as WASM.
+func (r QueryResponse) ToMap() map[string]any {
+	out := make(map[string]any)
+	if r.Data != nil {
+		out["data"] = r.Data
+	}
+	if len(r.Extensions) > 0 {
+		out["extensions"] = r.Extensions
+	}
+	errors := make([]map[string]any, len(r.Errors))
+	for i, e := range r.Errors {
+		err := make(map[string]any)
+		err["message"] = e.Message
+		if e.Path != nil {
+			err["path"] = e.Path.String()
+		}
+		if len(e.Extensions) > 0 {
+			err["extensions"] = e.Extensions
+		}
+		locations := make([]map[string]any, len(e.Locations))
+		for i, l := range e.Locations {
+			locations[i] = map[string]any{
+				"line":   l.Line,
+				"column": l.Column,
+			}
+		}
+		if len(locations) > 0 {
+			err["locations"] = locations
+		}
+		errors[i] = err
+	}
+	if len(errors) > 0 {
+		out["errors"] = errors
+	}
+	return out
 }

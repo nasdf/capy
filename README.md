@@ -1,9 +1,3 @@
 # Capy
 
-A distributed graph database.
-
-## Features
-
-- Define schemas, queries, and mutations using GraphQL
-- Branch, merge, and sync data with automated merge strategies
-- Log, diff, and revert changes from the transaction graph
+A distributed graph database with integrated version control, designed for local-first and edge computing applications across web, mobile, desktop, and embedded devices.

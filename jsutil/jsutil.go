@@ -1,6 +1,6 @@
 //go:build js
 
-package core_js
+package jsutil
 
 import (
 	"errors"
@@ -31,25 +31,29 @@ func NewPromise(fn func(resolve, reject func(value js.Value) js.Value) any) js.V
 
 // AwaitPromise is a helper function that waits for a promise to resolve or reject
 // and returns the results and an error value.
-func AwaitPromise(prom js.Value) (res []js.Value, err error) {
+func AwaitPromise(v js.Value) (res []js.Value, err error) {
 	var wait sync.WaitGroup
+
+	// called when the promise is resolved
 	onFulfilled := js.FuncOf(func(this js.Value, args []js.Value) any {
 		defer wait.Done()
 		res = args
 		return js.Undefined()
 	})
-	defer onFulfilled.Release()
 
+	// called when the promise is rejected
 	onRejected := js.FuncOf(func(this js.Value, args []js.Value) any {
 		defer wait.Done()
 		err = errors.New(args[0].String())
 		return js.Undefined()
 	})
-	defer onRejected.Release()
 
 	wait.Add(1)
-	prom.Call("then", onFulfilled, onRejected)
+	v.Call("then", onFulfilled, onRejected)
 	wait.Wait()
+
+	onFulfilled.Release()
+	onRejected.Release()
 
 	return
 }
