@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/nasdf/capy/object"
+	"github.com/rodent-software/capy/object"
 )
 
 type CommitIterator struct {

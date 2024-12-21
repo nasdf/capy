@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/nasdf/capy/object"
+	"github.com/rodent-software/capy/object"
 
 	"github.com/google/uuid"
 	"github.com/vektah/gqlparser/v2/ast"

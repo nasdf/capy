@@ -6,7 +6,7 @@ import (
 	"io"
 	"math"
 
-	"github.com/nasdf/capy/object"
+	"github.com/rodent-software/capy/object"
 )
 
 type Decoder struct {

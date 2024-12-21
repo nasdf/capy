@@ -1,4 +1,4 @@
-module github.com/nasdf/capy
+module github.com/rodent-software/capy
 
 go 1.23.3
 

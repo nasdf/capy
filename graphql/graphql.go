@@ -3,7 +3,7 @@ package graphql
 import (
 	"context"
 
-	"github.com/nasdf/capy/core"
+	"github.com/rodent-software/capy/core"
 
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"

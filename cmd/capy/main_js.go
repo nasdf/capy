@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"syscall/js"
 
-	"github.com/nasdf/capy/core"
-	"github.com/nasdf/capy/graphql"
-	"github.com/nasdf/capy/jsutil"
+	"github.com/rodent-software/capy/core"
+	"github.com/rodent-software/capy/graphql"
+	"github.com/rodent-software/capy/jsutil"
 )
 
 // tinygo build -o capy.wasm -no-debug -scheduler=none ./cmd/capy

@@ -5,7 +5,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/nasdf/capy/object"
+	"github.com/rodent-software/capy/object"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

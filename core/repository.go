@@ -5,9 +5,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/nasdf/capy/codec"
-	"github.com/nasdf/capy/graphql/schema_gen"
-	"github.com/nasdf/capy/object"
+	"github.com/rodent-software/capy/codec"
+	"github.com/rodent-software/capy/graphql/schema_gen"
+	"github.com/rodent-software/capy/object"
 
 	"github.com/vektah/gqlparser/v2"
 	"github.com/vektah/gqlparser/v2/ast"

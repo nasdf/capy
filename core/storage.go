@@ -6,8 +6,8 @@ import (
 	"errors"
 	"io"
 
-	"github.com/nasdf/capy/codec"
-	"github.com/nasdf/capy/object"
+	"github.com/rodent-software/capy/codec"
+	"github.com/rodent-software/capy/object"
 	"golang.org/x/crypto/sha3"
 )
 

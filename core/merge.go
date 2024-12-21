@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/nasdf/capy/object"
+	"github.com/rodent-software/capy/object"
 )
 
 // MergeConflictResolver is a callback function that is used to resolver merge conflicts.

@@ -6,14 +6,14 @@ import (
 	"context"
 	"syscall/js"
 
-	"github.com/nasdf/capy/jsutil"
+	"github.com/rodent-software/capy/jsutil"
 )
 
 // jsStorage wraps the JavaScript Storage interface.
 //
 //	interface Storage {
 //	  get(key: string): Promise<Uint8Array>
-//	  set(key: string, val: Uint8Array): Promise<void>
+//	  set(key: string, value: Uint8Array): Promise<void>
 //	}
 type jsStorage js.Value
 

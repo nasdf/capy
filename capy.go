@@ -3,7 +3,7 @@ package capy
 import (
 	"context"
 
-	"github.com/nasdf/capy/core"
+	"github.com/rodent-software/capy/core"
 )
 
 func Open(ctx context.Context, storage core.Storage) (*core.Repository, error) {

@@ -10,9 +10,9 @@ import (
 	"testing"
 	"text/template"
 
-	"github.com/nasdf/capy"
-	"github.com/nasdf/capy/core"
-	"github.com/nasdf/capy/graphql"
+	"github.com/rodent-software/capy"
+	"github.com/rodent-software/capy/core"
+	"github.com/rodent-software/capy/graphql"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
